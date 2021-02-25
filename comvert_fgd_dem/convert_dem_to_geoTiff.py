@@ -1,157 +1,132 @@
 import os
 import re
-from glob import glob
+from pathlib import Path
 
 import numpy as np
 from osgeo import gdal, osr
 
 
-class ConvertDEMtoGeotiffContents:
-    # ダイアログの初期表示等の処理はここに記載する
-    def __init__(self):
-        pass
+class ConvertDemToGeotiff:
+    def __init__(self, import_path=Path("../DEM"), output_path=Path("../GeoTiff")):
+        self.import_path = import_path
+        self.output_path = output_path
+        self.xml_paths = [xml_path for xml_path in self.import_path.glob("*.xml")]
 
-    # 処理を一括で行い、選択されたディレクトリに入っているxmlをGeoTiffにコンバートして指定したディレクトリに吐き出す
-    def convert_DEM(self):
-        # 選択したフォルダのパスを取得
-        self.import_path = self.dlg.mQgsFileWidget_1.filePath()
-        self.geotiff_output_path = self.dlg.mQgsFileWidget_2.filePath()
+    def get_mesh_cords(self):
+        """ファイルパスのリストからメッシュコードのリストを取得する
 
-        # 選択したCSRの識別子を取得
-        # import_crs = self.dlg.mQgsProjectionSelectionWidget_1.crs().authid()
-        output_crs = self.dlg.mQgsProjectionSelectionWidget.crs().authid()
+        Returns:
+            list: メッシュコードのリスト
 
-        file_name_list = self.file_name_list_from_dir_path()
-        mesh_cord_list = self.get_mesh_cord(file_name_list)
-        meta_data_list = self.get_metadata_list(file_name_list)
-        contents_list = self.get_contents_list(file_name_list)
-        lower_and_upper_latlon_list = self.find_lower_and_upper_latlon_from_all_xmls(meta_data_list)
+        Raises:
+            2次メッシュと3次メッシュが混合している場合にエラー
 
-        pixel_size_x = meta_data_list[0]['pixel_size']['x']
-        pixel_size_y = meta_data_list[0]['pixel_size']['y']
+        """
+        third_mesh_cords = []
+        second_mesh_cords = []
 
-        gridcell_size_list = self.cal_gridcell_size_of_xml(pixel_size_x,
-                                                           pixel_size_y, lower_and_upper_latlon_list)
+        for xml_path in self.xml_paths:
+            mesh_cord = self.get_metadata(xml_path)['mesh_cord']
+            str_mesh = str(mesh_cord)
+            if len(str_mesh) == 6:
+                second_mesh_cords.append(mesh_cord)
+            elif len(str_mesh) == 8:
+                third_mesh_cords.append(mesh_cord)
 
-        large_mesh_contents_list = self.find_coordinates_in_the_large_mesh(
-            gridcell_size_list,
-            lower_and_upper_latlon_list,
-            meta_data_list,
-            contents_list
-        )
+        # どちらもTrue、つまり要素が存在しているときにraise
+        if all(third_mesh_cords, second_mesh_cords):
+            raise Exception('2次メッシュと3次メッシュが混合しています。')
 
-        # self.resampling('EPSG:4326', 'EPSG:2454')
-        self.resampling('EPSG:4326', output_crs)
+        elif third_mesh_cords == []:
+            second_mesh_cords.sort()
+            return second_mesh_cords
+        else:
+            third_mesh_cords.sort()
+            return third_mesh_cords
 
-        merge_layer = QgsRasterLayer(os.path.join(self.geotiff_output_path, 'merge.tif'), 'merge')
-        warp_layer = QgsRasterLayer(os.path.join(self.geotiff_output_path, 'warp.tif'), 'warp')
+    @staticmethod
+    def _get_mesh_code(xml_path):
+        """xmlからメッシュコードを取得する
 
-        QgsProject.instance().addMapLayer(merge_layer)
-        QgsProject.instance().addMapLayer(warp_layer)
+        Args:
+            xml_path (Path): xmlのパス
 
-        return True
+        Returns:
+            int: メッシュコード
 
-    # キャンセルクリック
-    def dlg_cancel(self):
-        # ダイアログを非表示
-        self.dlg.hide()
-
-    # file_name_listを作成
-    def file_name_list_from_dir_path(self):
-        file_name_list = []
-
-        for x in glob(os.path.join(self.import_path, '*')):
-            if not x.find('.xml') == -1:
-                file_name_list.append(os.path.relpath(x, self.import_path))
-            else:
-                print('{}はXMLではありません。passします。\n'.format(x))
-                continue
-
-        return file_name_list
-
-    # ディレクトリ内のxmlからメッシュコードやメタデータの辞書を取得し
-    def get_metadata(self, file_name):
-        xml_path = os.path.join(self.import_path, file_name)
-
-        meta_data = {}
-
-        with open(xml_path, 'r') as x:
-            # メッシュコードを格納
-            r = re.compile('<mesh>(.+)</mesh>')
-            for x_line in x:
-                m = r.search(x_line)
-                if m is not None:
-                    meta_data['mesh_cord'] = int(m.group(1))
+        """
+        with xml_path.open('r') as xml:
+            # xmlの構文がおかしい？のでxml.etree.ElementTreeが利用できなさそう（要調査）
+            pattern = re.compile('<mesh>(.+)</mesh>')
+            for x_line in xml:
+                match = pattern.search(x_line)
+                if match is not None:
+                    mesh_code = int(match.group(1))
                     break
+        return mesh_code
 
-            if meta_data == {}:
-                raise Exception('{}はDEMではありません。処理を終了します。\n'.format(xml_path))
+    @staticmethod
+    def _get_xml_content(xml_file, pattern_str):
+        pattern = re.compile(pattern_str)
+        for x_line in xml_file:
+            match_obj = pattern.search(x_line)
+            if match_obj is not None:
+                return match_obj
 
-            # メッシュの左下の座標を格納
-            r = re.compile('<gml:lowerCorner>(.+) (.+)</gml:lowerCorner>')
-            for x_line in x:
-                m = r.search(x_line)
-                if m is not None:
-                    lower_corner = {}
+    def get_metadata_from_xml(self, xml_path):
+        """xmlからメタデータを取得し、メッシュコードやメタデータの辞書を返す
 
-                    lower_corner['lat'] = float(m.group(1))
-                    lower_corner['lon'] = float(m.group(2))
+        Args:
+            xml_path (Path): xmlのファイルパス
 
+        Returns:
+            object:
+
+        """
+        meta_data = {'mesh_cord': self._get_mesh_code(xml_path)}
+        if meta_data["mesh_cord"] is None:
+            raise Exception(f"{xml_path}からメッシュコードを取得できませんでした。")
+
+        patterns = {
+            "lower_corner": "<gml:lowerCorner>(.+) (.+)</gml:lowerCorner>",
+            "upper_corner": "<gml:upperCorner>(.+) (.+)</gml:upperCorner>",
+            "grid_length": "<gml:high>(.+) (.+)</gml:high>",
+            "start_point": "<gml:startPoint>(.+) (.+)</gml:startPoint>"
+        }
+
+        with xml_path.open('r') as xml:
+            for key, value in patterns.items():
+                match_obj = self._get_xml_content(xml, value)
+                if match_obj is None:
+                    raise Exception(f"{value}がマッチしませんでした。")
+
+                if key == "lower_corner":
+                    lower_corner = {'lat': float(match_obj.group(1)), 'lon': float(match_obj.group(2))}
                     meta_data['lower_corner'] = lower_corner
-                    break
-
-            # メッシュの右上の座標を格納
-            r = re.compile("<gml:upperCorner>(.+) (.+)</gml:upperCorner>")
-            for x_line in x:
-                m = r.search(x_line)
-                if m is not None:
-                    upper_corner = {}
-
-                    upper_corner['lat'] = float(m.group(1))
-                    upper_corner['lon'] = float(m.group(2))
-
+                elif key == "upper_corner":
+                    upper_corner = {'lat': float(match_obj.group(1)), 'lon': float(match_obj.group(2))}
                     meta_data['upper_corner'] = upper_corner
-                    break
-
-            # グリッド数を格納
-            r = re.compile("<gml:high>(.+) (.+)</gml:high>")
-            for x_line in x:
-                m = r.search(x_line)
-                if m is not None:
-                    grid_length = {}
-
-                    grid_length['x'] = int(m.group(1)) + 1
-                    grid_length['y'] = int(m.group(2)) + 1
-
+                elif key == "grid_length":
+                    grid_length = {'x': int(match_obj.group(1)) + 1, 'y': int(match_obj.group(2)) + 1}
                     meta_data['grid_length'] = grid_length
-                    break
-
-            # スタートポジションを格納
-            r = re.compile("<gml:startPoint>(.+) (.+)</gml:startPoint>")
-            for x_line in x:
-                m = r.search(x_line)
-                if m is not None:
-                    start_point = {}
-
-                    start_point['x'] = int(m.group(1))
-                    start_point['y'] = int(m.group(2))
-
+                elif key == "start_point":
+                    start_point = {'x': int(match_obj.group(1)), 'y': int(match_obj.group(2))}
                     meta_data['start_point'] = start_point
-                    break
 
         upper_corner_lon = meta_data['upper_corner']['lon']
         lower_corner_lon = meta_data['lower_corner']['lon']
         xlen = meta_data['grid_length']['x']
+
         lower_corner_lat = meta_data['lower_corner']['lat']
         upper_corner_lat = meta_data['upper_corner']['lat']
         ylen = meta_data['grid_length']['y']
 
         # セルのサイズを算出
         # 右上から左下の緯度経度を引いてグリッドセルの配列数で割って1ピクセルのサイズを出す
-        pixel_size = {}
-
-        pixel_size['x'] = (upper_corner_lon - lower_corner_lon) / xlen
-        pixel_size['y'] = (lower_corner_lat - upper_corner_lat) / ylen
+        pixel_size = {
+            'x': (upper_corner_lon - lower_corner_lon) / xlen,
+            'y': (lower_corner_lat - upper_corner_lat) / ylen
+        }
 
         meta_data['pixel_size'] = pixel_size
 
@@ -217,7 +192,7 @@ class ConvertDEMtoGeotiffContents:
         i = 0
 
         # 標高を格納
-        # データの並びは北西端から南東端に向かっているので行毎に座標を配列に入れていく
+        # データの並びは北西端から南東端に向かっているので行毎に座標を配列に入れていく
         for y in range(start_point_y, ylen):
             for x in range(start_point_x, xlen):
                 if i < num_tuples:
@@ -261,30 +236,6 @@ class ConvertDEMtoGeotiffContents:
             mesh_data_list.append(m)
 
         return mesh_data_list
-
-    # メッシュコードをリスト化
-    # 2次メッシュと3次メッシュが混合していたらエラーを吐く
-    def get_mesh_cord(self, file_name_list):
-        third_mesh_cord_list = []
-        second_mesh_cord_list = []
-
-        for file_name in file_name_list:
-            mesh_cord = self.get_metadata(file_name)['mesh_cord']
-            s_mesh = str(mesh_cord)
-            if len(s_mesh) == 6:
-                second_mesh_cord_list.append(mesh_cord)
-            elif len(s_mesh) == 8:
-                third_mesh_cord_list.append(mesh_cord)
-
-        if third_mesh_cord_list != [] and second_mesh_cord_list != []:
-            raise Exception('2次メッシュと3次メッシュが混合しています。')
-
-        elif third_mesh_cord_list == []:
-            second_mesh_cord_list.sort()
-            return second_mesh_cord_list
-        else:
-            third_mesh_cord_list.sort()
-            return third_mesh_cord_list
 
     # 複数のxmlを比較して左下と右上の緯度経度を見つける
     def find_lower_and_upper_latlon_from_all_xmls(self, meta_data_list):
@@ -330,7 +281,7 @@ class ConvertDEMtoGeotiffContents:
                         pixel_size_y]
 
         merge_tiff_file = 'merge.tif'
-        tiffFile = os.path.join(self.geotiff_output_path, merge_tiff_file)
+        tiffFile = os.path.join(self.output_path, merge_tiff_file)
 
         # ドライバーの作成
         driver = gdal.GetDriverByName("GTiff")
@@ -359,8 +310,8 @@ class ConvertDEMtoGeotiffContents:
     # 再投影
     # 元画像のEPSGとwarp先のEPSGを引数にとる
     def resampling(self, srcSRS, outputSRS):
-        warp_path = os.path.join(self.geotiff_output_path, 'warp.tif')
-        src_path = os.path.join(self.geotiff_output_path, 'merge.tif')
+        warp_path = os.path.join(self.output_path, 'warp.tif')
+        src_path = os.path.join(self.output_path, 'merge.tif')
         resampledRas = gdal.Warp(warp_path, src_path, srcSRS=srcSRS, dstSRS=outputSRS, resampleAlg="near")
 
         resampledRas.FlushCache()
@@ -427,3 +378,31 @@ class ConvertDEMtoGeotiffContents:
                            large_mesh_pixel_size_y, large_mesh_xlen, large_mesh_ylen)
 
         return large_mesh_narray
+
+    # 処理を一括で行い、選択されたディレクトリに入っているxmlをGeoTiffにコンバートして指定したディレクトリに吐き出す
+    def all_exe(self, import_epsg, output_epsg):
+        mesh_cords = self.get_mesh_cords()
+        meta_data_list = self.get_metadata_list(self.xml_paths)
+        contents = self.get_contents_list(self.xml_paths)
+        lower_and_upper_lat_lon_list = self.find_lower_and_upper_latlon_from_all_xmls(meta_data_list)
+
+        pixel_size_x = meta_data_list[0]['pixel_size']['x']
+        pixel_size_y = meta_data_list[0]['pixel_size']['y']
+
+        gridcell_size_list = self.cal_gridcell_size_of_xml(pixel_size_x,
+                                                           pixel_size_y, lower_and_upper_lat_lon_list)
+
+        large_mesh_contents_list = self.find_coordinates_in_the_large_mesh(
+            gridcell_size_list,
+            lower_and_upper_lat_lon_list,
+            meta_data_list,
+            contents
+        )
+
+        # self.resampling('EPSG:4326', 'EPSG:2454')
+        self.resampling('EPSG:4326', output_epsg)
+
+        merge_tiff_path = os.path.join(self.output_path, 'merge.tif')
+        warp_tiff_path = os.path.join(self.output_path, 'warp.tif')
+
+        return
