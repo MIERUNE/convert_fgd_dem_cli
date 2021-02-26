@@ -1,5 +1,6 @@
 import os
 import xml.etree.ElementTree as et
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -92,10 +93,16 @@ class Dem:
 
 
 class ConvertDemToGeotiff:
-    def __init__(self, import_path="./DEM/FG-GML-6441-32-DEM5A/", output_path="./GeoTiff"):
+    def __init__(self,
+                 import_path="./DEM/",
+                 output_path="./GeoTiff",
+                 import_epsg="EPSG:4326",
+                 output_epsg="EPSG:4326"):
         self.import_path: Path = Path(import_path)
         self.output_path: Path = Path(output_path)
-        self.xml_paths: list = [xml_path for xml_path in self.import_path.glob("*.xml")]
+        self.import_epsg = import_epsg
+        self.output_epsg = output_epsg
+        self.xml_paths: list = self._get_xml_paths_from_import_path()
         self.dem_instances: list = [Dem(xml_path) for xml_path in self.xml_paths]
         self.mesh_cords: list = []
         self.meta_data_list: list = []
@@ -139,7 +146,6 @@ class ConvertDemToGeotiff:
             third_mesh_cords.sort()
             return third_mesh_cords
 
-    # メタデータのリストを作成
     def get_metadata_list(self):
         """メタデータのリストを取得する
 
@@ -150,9 +156,20 @@ class ConvertDemToGeotiff:
         mesh_metadata_list = [dem.meta_data for dem in self.dem_instances]
         return mesh_metadata_list
 
-    # ディレクトリ内のxmlから標高値を取得し標高値のnarrayを返す
     def _get_contents(self, dem_instance):
-        contents_dict = {}
+        """Demから標高値を取得し、メッシュコードと標高値（np.array）を格納した辞書を返す
+
+        Args:
+            dem_instance(Dem): Demクラスのインスタンス
+
+        Returns:
+            dict: メッシュコードと標高値（np.array）を格納した辞書
+
+        """
+        contents_dict = {
+            "mesh_cord": None,
+            "np_array": None
+        }
 
         meta_data = dem_instance.meta_data
         mesh_cord = meta_data["mesh_cord"]
@@ -185,13 +202,23 @@ class ConvertDemToGeotiff:
 
         return contents_dict
 
-    # 標高値のリストを作成
     def get_contents_list(self):
+        """Demからメッシュコードと標高値のnp.arrayを格納した辞書のリストを作成する
+
+        Returns:
+            list: メッシュコードと標高値のnp.arrayを格納した辞書のリスト
+
+        """
         mesh_contents_list = [self._get_contents(dem) for dem in self.dem_instances]
         return mesh_contents_list
 
-    # 複数のxmlを比較して左下と右上の緯度経度を見つける
     def find_max_min_latlon_from_all_dems(self):
+        """対象の全Demから緯度経度の最大・最小値を取得
+
+        Returns:
+            dict: 緯度経度の最大・最小値を格納した辞書
+
+        """
         lower_left_lat_min = min([meta_data['lower_corner']['lat'] for meta_data in self.meta_data_list])
         lower_left_lon_min = min([meta_data['lower_corner']['lon'] for meta_data in self.meta_data_list])
         upper_right_lat_max = max([meta_data['upper_corner']['lat'] for meta_data in self.meta_data_list])
@@ -206,8 +233,18 @@ class ConvertDemToGeotiff:
 
         return min_max_latlng
 
-    # 全xmlの座標を参照して画像の大きさを算出する
     def calc_grid_cell_size(self, pixel_size_x, pixel_size_y, min_max_latlng):
+        """対象の全Demの座標を取得し、出力画像の大きさを算出する
+
+        Args:
+            pixel_size_x: x方向のピクセルサイズ
+            pixel_size_y: y方向のピクセルサイズ
+            min_max_latlng: 緯度経度の最大・最小値が格納された辞書
+
+        Returns:
+            tuple: x/y方向の画像の大きさ
+
+        """
         lower_left_lat = min_max_latlng["lower_left_lat_min"]
         lower_left_lon = min_max_latlng["lower_left_lon_min"]
         upper_right_lat = min_max_latlng["upper_right_lat_max"]
@@ -218,8 +255,19 @@ class ConvertDemToGeotiff:
 
         return x_len, y_len
 
-    # アレイと座標、ピクセルサイズ、グリッドサイズからGeoTiffを作成
-    def write_geotiff(self, np_array, lower_left_lon, upper_right_lat, pixel_size_x, pixel_size_y, xlen, ylen):
+    def write_geotiff(self, np_array, lower_left_lon, upper_right_lat, pixel_size_x, pixel_size_y, x_len, y_len):
+        """標高と座標、ピクセルサイズ、グリッドサイズからGeoTiffを作成
+
+        Args:
+            np_array:
+            lower_left_lon:
+            upper_right_lat:
+            pixel_size_x:
+            pixel_size_y:
+            x_len:
+            y_len:
+
+        """
         # 「左上経度・東西解像度・回転（０で南北方向）・左上緯度・回転（０で南北方向）・南北解像度（北南方向であれば負）」
         geo_transform = [lower_left_lon, pixel_size_x, 0, upper_right_lat, 0, pixel_size_y]
 
@@ -229,7 +277,7 @@ class ConvertDemToGeotiff:
         # ドライバーの作成
         driver = gdal.GetDriverByName("GTiff")
         # ドライバーに対して「保存するファイルのパス・グリットセル数・バンド数・ラスターの種類・ドライバー固有のオプション」を指定してファイルを作成
-        dst_ds = driver.Create(tiff_file, xlen, ylen, 1, gdal.GDT_Float32)
+        dst_ds = driver.Create(tiff_file, x_len, y_len, 1, gdal.GDT_Float32)
         # geo_transform
         dst_ds.SetGeoTransform(geo_transform)
 
@@ -250,18 +298,31 @@ class ConvertDemToGeotiff:
         # ディスクへの書き出し
         dst_ds.FlushCache()
 
-    # 再投影
-    # 元画像のEPSGとwarp先のEPSGを引数にとる
-    def resampling(self, srcSRS, outputSRS):
+    def resampling(self, src_epsg, output_epsg):
+        """inとoutのepsgコードを受け取りmerge.tifをresamplingした新たなGeoTiffを出力する
+
+        Args:
+            src_epsg:
+            output_epsg:
+
+        """
         warp_path = os.path.join(self.output_path, 'warp.tif')
         src_path = os.path.join(self.output_path, 'merge.tif')
-        resampledRas = gdal.Warp(warp_path, src_path, srcSRS=srcSRS, dstSRS=outputSRS, resampleAlg="near")
+        resampledRas = gdal.Warp(warp_path, src_path, srcSRS=src_epsg, dstSRS=output_epsg, resampleAlg="near")
 
         resampledRas.FlushCache()
         resampledRas = None
 
-    # メタデータとコンテンツが与えられたらメッシュコードが同じなら結合
     def combine_meta_data_and_contents(self, meta_data_list, contents_list):
+        """メッシュコードが同一のメタデータと標高値を結合する
+
+        Args:
+            meta_data_list:
+            contents_list:
+
+        Returns:
+
+        """
         mesh_data_list = []
 
         # 辞書のリストをメッシュコードをKeyにしてソート
@@ -274,8 +335,18 @@ class ConvertDemToGeotiff:
 
         return mesh_data_list
 
-    # 大きな配列を作って、そこに標高値をどんどん入れていく
     def find_coordinates_in_large_mesh(self, grid_cell_size, min_max_latlng, metadata_list, contents_list):
+        """対象のDemを全て取り込んだnp.arrayを作成する
+
+        Args:
+            grid_cell_size:
+            min_max_latlng:
+            metadata_list:
+            contents_list:
+
+        Returns:
+
+        """
         # 全xmlを包括するグリッドセル数
         large_mesh_x_len = grid_cell_size[0]
         large_mesh_y_len = grid_cell_size[1]
@@ -333,15 +404,38 @@ class ConvertDemToGeotiff:
 
         return large_mesh_np_array
 
-    # 処理を一括で行い、選択されたディレクトリに入っているxmlをGeoTiffにコンバートして指定したディレクトリに吐き出す
-    # def all_exe(self, import_epsg, output_epsg):
+    def _get_xml_paths_from_import_path(self):
+        """指定したパスからxmlのPathオブジェクトのリストを作成
+
+        """
+        if self.import_path.is_dir():
+            xml_paths = [xml_path for xml_path in self.import_path.glob("*.xml")]
+            if xml_paths is None:
+                raise Exception("指定ディレクトリに.xmlが存在しません")
+
+        elif self.import_path.suffix == ".xml":
+            xml_paths = [self.import_path]
+
+        elif self.import_path.suffix == ".zip":
+            with zipfile.ZipFile(self.import_path, 'r') as zip_data:
+                zip_data.extractall(path=self.import_path.parent)
+                extract_dir = self.import_path.parent / self.import_path.stem
+                xml_paths = [xml_path for xml_path in extract_dir.glob("*.xml")]
+
+        else:
+            raise Exception("指定できる形式は「xml」「.xmlが格納されたディレクトリ」「.xmlが格納された.zip」のみです")
+
+        return xml_paths
+
     def all_exe(self):
+        """処理を一括で行い、選択されたディレクトリに入っているxmlをGeoTiffにコンバートして指定したディレクトリに吐き出す
+
+        """
         self.mesh_cords = self.get_mesh_cords()
         self.meta_data_list = self.get_metadata_list()
         self.content_list = self.get_contents_list()
         self.min_max_latlng = self.find_max_min_latlon_from_all_dems()
 
-        # todo: すべてのpixel_sizeを比較した方が良さそう
         self.pixel_size_x = self.meta_data_list[0]['pixel_size']['x']
         self.pixel_size_y = self.meta_data_list[0]['pixel_size']['y']
 
@@ -354,10 +448,7 @@ class ConvertDemToGeotiff:
             self.content_list
         )
 
-        self.resampling('EPSG:4326', 'EPSG:2454')
-        # self.resampling('EPSG:4326', output_epsg)
+        self.resampling(self.import_epsg, self.output_epsg)
 
         merge_tiff_path = os.path.join(self.output_path, 'merge.tif')
         warp_tiff_path = os.path.join(self.output_path, 'warp.tif')
-
-        return
