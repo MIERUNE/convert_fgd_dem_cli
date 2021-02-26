@@ -4,9 +4,9 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-gdal = "*"
-numpy = "*"
-osgeo = "*"
+numpy = "==1.20.1"
+osgeo = "==0.0.0"
+gdal = "==3.2.1"
 
 [dev-packages]
 

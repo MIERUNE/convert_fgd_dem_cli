@@ -97,6 +97,12 @@ class ConvertDemToGeotiff:
         self.output_path: Path = Path(output_path)
         self.xml_paths: list = [xml_path for xml_path in self.import_path.glob("*.xml")]
         self.dem_instances: list = [Dem(xml_path) for xml_path in self.xml_paths]
+        self.mesh_cords: list = []
+        self.meta_data_list: list = []
+        self.content_list: list = []
+        self.min_max_latlng: dict = {}
+        self.pixel_size_x: float = 0.0
+        self.pixel_size_y: float = 0.0
 
     def get_mesh_cords(self):
         """ファイルパスのリストからメッシュコードのリストを取得する
@@ -158,8 +164,8 @@ class ConvertDemToGeotiff:
         y_len = meta_data['grid_length']['y']
 
         # 標高地を保存するための二次元配列を作成
-        n_array = np.empty((y_len, x_len), np.float32)
-        n_array.fill(-9999)
+        np_array = np.empty((y_len, x_len), np.float32)
+        np_array.fill(-9999)
 
         start_point_x = meta_data['start_point']['x']
         start_point_y = meta_data['start_point']['y']
@@ -170,12 +176,12 @@ class ConvertDemToGeotiff:
         for y in range(start_point_y, y_len):
             for x in range(start_point_x, x_len):
                 insert_value = float(elevations[index])
-                n_array[y][x] = insert_value
+                np_array[y][x] = insert_value
                 index += 1
             start_point_x = 0
 
         contents_dict['mesh_cord'] = mesh_cord
-        contents_dict['n_array'] = n_array
+        contents_dict['np_array'] = np_array
 
         return contents_dict
 
@@ -185,58 +191,54 @@ class ConvertDemToGeotiff:
         return mesh_contents_list
 
     # 複数のxmlを比較して左下と右上の緯度経度を見つける
-    def find_lower_and_upper_latlon_from_all_xmls(self, meta_data_list):
-        lower_left_lat_min = []
-        lower_left_lon_min = []
-        upper_right_lat_max = []
-        upper_right_lon_max = []
+    def find_max_min_latlon_from_all_dems(self):
+        lower_left_lat_min = min([meta_data['lower_corner']['lat'] for meta_data in self.meta_data_list])
+        lower_left_lon_min = min([meta_data['lower_corner']['lon'] for meta_data in self.meta_data_list])
+        upper_right_lat_max = max([meta_data['upper_corner']['lat'] for meta_data in self.meta_data_list])
+        upper_right_lon_max = max([meta_data['upper_corner']['lon'] for meta_data in self.meta_data_list])
 
-        for meta_data in meta_data_list:
-            lower_left_lat = meta_data['lower_corner']['lat']
-            lower_left_lon = meta_data['lower_corner']['lon']
-            upper_right_lat = meta_data['upper_corner']['lat']
-            upper_right_lon = meta_data['upper_corner']['lon']
+        min_max_latlng = {
+            "lower_left_lat_min": lower_left_lat_min,
+            "lower_left_lon_min": lower_left_lon_min,
+            "upper_right_lat_max": upper_right_lat_max,
+            "upper_right_lon_max": upper_right_lon_max,
+        }
 
-            lower_left_lat_min.append(lower_left_lat)
-            lower_left_lon_min.append(lower_left_lon)
-            upper_right_lat_max.append(upper_right_lat)
-            upper_right_lon_max.append(upper_right_lon)
-
-        return [min(lower_left_lat_min), min(lower_left_lon_min), max(upper_right_lat_max), max(upper_right_lon_max)]
+        return min_max_latlng
 
     # 全xmlの座標を参照して画像の大きさを算出する
-    def cal_gridcell_size_of_xml(self, pixel_size_x, pixel_size_y, lower_and_upper_latlon_list):
-        lower_left_lat = lower_and_upper_latlon_list[0]
-        lower_left_lon = lower_and_upper_latlon_list[1]
-        upper_right_lat = lower_and_upper_latlon_list[2]
-        upper_right_lon = lower_and_upper_latlon_list[3]
+    def calc_grid_cell_size(self, pixel_size_x, pixel_size_y, min_max_latlng):
+        lower_left_lat = min_max_latlng["lower_left_lat_min"]
+        lower_left_lon = min_max_latlng["lower_left_lon_min"]
+        upper_right_lat = min_max_latlng["upper_right_lat_max"]
+        upper_right_lon = min_max_latlng["upper_right_lon_max"]
 
-        xlen = round(abs((upper_right_lon - lower_left_lon) / pixel_size_x))
-        ylen = round(abs((upper_right_lat - lower_left_lat) / pixel_size_y))
+        x_len = round(abs((upper_right_lon - lower_left_lon) / pixel_size_x))
+        y_len = round(abs((upper_right_lat - lower_left_lat) / pixel_size_y))
 
-        return xlen, ylen
+        return x_len, y_len
 
     # アレイと座標、ピクセルサイズ、グリッドサイズからGeoTiffを作成
-    def write_geotiff(self, narray, lower_left_lon, upper_right_lat, pixel_size_x, pixel_size_y, xlen, ylen):
+    def write_geotiff(self, np_array, lower_left_lon, upper_right_lat, pixel_size_x, pixel_size_y, xlen, ylen):
         # 「左上経度・東西解像度・回転（０で南北方向）・左上緯度・回転（０で南北方向）・南北解像度（北南方向であれば負）」
-        geotransform = [lower_left_lon, pixel_size_x, 0, upper_right_lat, 0, pixel_size_y]
+        geo_transform = [lower_left_lon, pixel_size_x, 0, upper_right_lat, 0, pixel_size_y]
 
         merge_tiff_file = 'merge.tif'
-        tiffFile = os.path.join(self.output_path, merge_tiff_file)
+        tiff_file = os.path.join(self.output_path, merge_tiff_file)
 
         # ドライバーの作成
         driver = gdal.GetDriverByName("GTiff")
         # ドライバーに対して「保存するファイルのパス・グリットセル数・バンド数・ラスターの種類・ドライバー固有のオプション」を指定してファイルを作成
-        dst_ds = driver.Create(tiffFile, xlen, ylen, 1, gdal.GDT_Float32)
-        # geotransformをセット
-        dst_ds.SetGeoTransform(geotransform)
+        dst_ds = driver.Create(tiff_file, xlen, ylen, 1, gdal.GDT_Float32)
+        # geo_transform
+        dst_ds.SetGeoTransform(geo_transform)
 
         # 作成したラスターの第一バンドを取得
-        rband = dst_ds.GetRasterBand(1)
+        r_band = dst_ds.GetRasterBand(1)
         # 第一バンドにアレイをセット
-        rband.WriteArray(narray)
+        r_band.WriteArray(np_array)
         # nodataの設定
-        rband.SetNoDataValue(-9999)
+        r_band.SetNoDataValue(-9999)
 
         # EPSGコードを引数にとる前処理？
         ref = osr.SpatialReference()
@@ -259,104 +261,103 @@ class ConvertDemToGeotiff:
         resampledRas = None
 
     # メタデータとコンテンツが与えられたらメッシュコードが同じなら結合
-    def combine_data(self, meta_data_list, contents_list):
+    def combine_meta_data_and_contents(self, meta_data_list, contents_list):
         mesh_data_list = []
 
         # 辞書のリストをメッシュコードをKeyにしてソート
         sort_metadata_list = sorted(meta_data_list, key=lambda x: x['mesh_cord'])
         sort_contents_list = sorted(contents_list, key=lambda x: x['mesh_cord'])
         # メタデータとコンテンツを結合
-        for m, c in zip(sort_metadata_list, sort_contents_list):
-            m.update(c)
-            mesh_data_list.append(m)
+        for metadata, content in zip(sort_metadata_list, sort_contents_list):
+            metadata.update(content)
+            mesh_data_list.append(metadata)
 
         return mesh_data_list
 
     # 大きな配列を作って、そこに標高値をどんどん入れていく
-    def find_coordinates_in_the_large_mesh(self, gridcell_size_list, lower_and_upper_latlon_list, metadata_list,
-                                           contents_list):
+    def find_coordinates_in_large_mesh(self, grid_cell_size, min_max_latlng, metadata_list, contents_list):
         # 全xmlを包括するグリッドセル数
-        large_mesh_xlen = gridcell_size_list[0]
-        large_mesh_ylen = gridcell_size_list[1]
+        large_mesh_x_len = grid_cell_size[0]
+        large_mesh_y_len = grid_cell_size[1]
 
         # 全xmlを包括する配列を作成
         # グリッドセルサイズが10000以上なら処理を終了
-        if large_mesh_xlen >= 10000 or large_mesh_ylen >= 10000:
+        if large_mesh_x_len >= 10000 or large_mesh_y_len >= 10000:
             raise Exception('セルサイズが大きすぎます')
 
-        large_mesh_narray = np.empty((large_mesh_ylen, large_mesh_xlen), np.float32)
-        large_mesh_narray.fill(-9999)
+        large_mesh_np_array = np.empty((large_mesh_y_len, large_mesh_x_len), np.float32)
+        large_mesh_np_array.fill(-9999)
 
         # マージ用配列の左下の座標を取得
-        large_mesh_lower_left_lat = lower_and_upper_latlon_list[0]
-        large_mesh_lower_left_lon = lower_and_upper_latlon_list[1]
+        large_mesh_lower_left_lat = min_max_latlng[0]
+        large_mesh_lower_left_lon = min_max_latlng[1]
         # マージ用配列の右上の座標を取得
-        large_mesh_upper_right_lat = lower_and_upper_latlon_list[2]
-        large_mesh_upper_right_lon = lower_and_upper_latlon_list[3]
+        large_mesh_upper_right_lat = min_max_latlng[2]
+        large_mesh_upper_right_lon = min_max_latlng[3]
 
         # マージ用配列のピクセルサイズ算出
-        large_mesh_pixel_size_x = (large_mesh_upper_right_lon - large_mesh_lower_left_lon) / large_mesh_xlen
-        large_mesh_pixel_size_y = (large_mesh_lower_left_lat - large_mesh_upper_right_lat) / large_mesh_ylen
+        large_mesh_pixel_size_x = (large_mesh_upper_right_lon - large_mesh_lower_left_lon) / large_mesh_x_len
+        large_mesh_pixel_size_y = (large_mesh_lower_left_lat - large_mesh_upper_right_lat) / large_mesh_y_len
 
         # メタデータと標高値を結合
-        mesh_data_list = self.combine_data(metadata_list, contents_list)
+        mesh_data_list = self.combine_meta_data_and_contents(metadata_list, contents_list)
 
         # メッシュのメッシュコードを取り出す
         for mesh_data in mesh_data_list:
             # データから標高値の配列を取得
-            narray = mesh_data['narray']
+            np_array = mesh_data['np_array']
             # グリッドセルサイズ
-            xlen = mesh_data['grid_length']['x']
-            ylen = mesh_data['grid_length']['y']
+            x_len = mesh_data['grid_length']['x']
+            y_len = mesh_data['grid_length']['y']
             # 読み込んだarrayの左下の座標を取得
             lower_left_lat = mesh_data['lower_corner']['lat']
             lower_left_lon = mesh_data['lower_corner']['lon']
             # (0, 0)からの距離を算出
-            lat_distans = lower_left_lat - large_mesh_lower_left_lat
-            lon_distans = lower_left_lon - large_mesh_lower_left_lon
+            lat_distance = lower_left_lat - large_mesh_lower_left_lat
+            lon_distance = lower_left_lon - large_mesh_lower_left_lon
             # numpy上の座標を取得(ピクセルサイズが少数のため誤差が出るから四捨五入)
-            x_coordinate = round(lon_distans / large_mesh_pixel_size_x)
-            y_coordinate = round(lat_distans / (-large_mesh_pixel_size_y))
+            x_coordinate = round(lon_distance / large_mesh_pixel_size_x)
+            y_coordinate = round(lat_distance / (-large_mesh_pixel_size_y))
             # スライスで指定する範囲を算出
-            row_start = int(large_mesh_ylen - (y_coordinate + ylen))
-            row_end = int(row_start + ylen)
+            row_start = int(large_mesh_y_len - (y_coordinate + y_len))
+            row_end = int(row_start + y_len)
             column_start = int(x_coordinate)
-            column_end = int(column_start + xlen)
+            column_end = int(column_start + x_len)
             # スライスで大きい配列に代入
-            large_mesh_narray[row_start:row_end, column_start:column_end] = narray
+            large_mesh_np_array[row_start:row_end, column_start:column_end] = np_array
 
         # アレイからGeoTiffを作成
-        self.write_geotiff(large_mesh_narray, large_mesh_lower_left_lon,
+        self.write_geotiff(large_mesh_np_array, large_mesh_lower_left_lon,
                            large_mesh_upper_right_lat, large_mesh_pixel_size_x,
-                           large_mesh_pixel_size_y, large_mesh_xlen, large_mesh_ylen)
+                           large_mesh_pixel_size_y, large_mesh_x_len, large_mesh_y_len)
 
-        return large_mesh_narray
+        return large_mesh_np_array
 
     # 処理を一括で行い、選択されたディレクトリに入っているxmlをGeoTiffにコンバートして指定したディレクトリに吐き出す
     # def all_exe(self, import_epsg, output_epsg):
     def all_exe(self):
         self.mesh_cords = self.get_mesh_cords()
         self.meta_data_list = self.get_metadata_list()
-        self.contents_list = self.get_contents_list()
-        # lower_and_upper_lat_lon_list = self.find_lower_and_upper_latlon_from_all_xmls(meta_data_list)
-        #
-        # pixel_size_x = meta_data_list[0]['pixel_size']['x']
-        # pixel_size_y = meta_data_list[0]['pixel_size']['y']
-        #
-        # gridcell_size_list = self.cal_gridcell_size_of_xml(pixel_size_x,
-        #                                                    pixel_size_y, lower_and_upper_lat_lon_list)
-        #
-        # large_mesh_contents_list = self.find_coordinates_in_the_large_mesh(
-        #     gridcell_size_list,
-        #     lower_and_upper_lat_lon_list,
-        #     meta_data_list,
-        #     contents
-        # )
-        #
-        # # self.resampling('EPSG:4326', 'EPSG:2454')
+        self.content_list = self.get_contents_list()
+        self.min_max_latlng = self.find_max_min_latlon_from_all_dems()
+
+        # todo: すべてのpixel_sizeを比較した方が良さそう
+        self.pixel_size_x = self.meta_data_list[0]['pixel_size']['x']
+        self.pixel_size_y = self.meta_data_list[0]['pixel_size']['y']
+
+        grid_cell_size = self.calc_grid_cell_size(self.pixel_size_x, self.pixel_size_y, self.min_max_latlng)
+
+        large_mesh_contents_list = self.find_coordinates_in_large_mesh(
+            grid_cell_size,
+            list(self.min_max_latlng.values()),
+            self.meta_data_list,
+            self.content_list
+        )
+
+        self.resampling('EPSG:4326', 'EPSG:2454')
         # self.resampling('EPSG:4326', output_epsg)
-        #
-        # merge_tiff_path = os.path.join(self.output_path, 'merge.tif')
-        # warp_tiff_path = os.path.join(self.output_path, 'warp.tif')
+
+        merge_tiff_path = os.path.join(self.output_path, 'merge.tif')
+        warp_tiff_path = os.path.join(self.output_path, 'warp.tif')
 
         return
