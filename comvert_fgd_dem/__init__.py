@@ -1,1 +1,1 @@
-from .convert_dem_to_geoTiff import ConvertDemToGeotiff
+from .convert_dem_to_geoTiff import Dem, ConvertDemToGeotiff
