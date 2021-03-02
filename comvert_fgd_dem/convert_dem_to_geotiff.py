@@ -100,8 +100,8 @@ class ConvertDemToGeotiff:
                  output_epsg="EPSG:4326"):
         self.import_path: Path = Path(import_path)
         self.output_path: Path = Path(output_path)
-        self.import_epsg = import_epsg
-        self.output_epsg = output_epsg
+        self.import_epsg: str = import_epsg
+        self.output_epsg: str = output_epsg
         self.xml_paths: list = self._get_xml_paths_from_import_path()
         self.dem_instances: list = [Dem(xml_path) for xml_path in self.xml_paths]
         self.mesh_cords: list = []
@@ -110,6 +110,8 @@ class ConvertDemToGeotiff:
         self.min_max_latlng: dict = {}
         self.pixel_size_x: float = 0.0
         self.pixel_size_y: float = 0.0
+        self.merge_tiff_path: Path = None
+        self.warp_tiff_path: Path = None
 
     def get_mesh_cords(self):
         """ファイルパスのリストからメッシュコードのリストを取得する
@@ -271,7 +273,7 @@ class ConvertDemToGeotiff:
         # 「左上経度・東西解像度・回転（０で南北方向）・左上緯度・回転（０で南北方向）・南北解像度（北南方向であれば負）」
         geo_transform = [lower_left_lon, pixel_size_x, 0, upper_right_lat, 0, pixel_size_y]
 
-        merge_tiff_file = 'merge.tif'
+        merge_tiff_file = 'dem_epsg4326.tif'
         tiff_file = os.path.join(self.output_path, merge_tiff_file)
 
         # ドライバーの作成
@@ -299,15 +301,15 @@ class ConvertDemToGeotiff:
         dst_ds.FlushCache()
 
     def resampling(self, src_epsg, output_epsg):
-        """inとoutのepsgコードを受け取りmerge.tifをresamplingした新たなGeoTiffを出力する
+        """inとoutのepsgコードを受け取りdem_epsg4326.tifをresamplingした新たなGeoTiffを出力する
 
         Args:
             src_epsg:
             output_epsg:
 
         """
-        warp_path = os.path.join(self.output_path, 'warp.tif')
-        src_path = os.path.join(self.output_path, 'merge.tif')
+        warp_path = os.path.join(self.output_path, 'dem_warped.tif')
+        src_path = os.path.join(self.output_path, 'dem_epsg4326.tif')
         resampledRas = gdal.Warp(warp_path, src_path, srcSRS=src_epsg, dstSRS=output_epsg, resampleAlg="near")
 
         resampledRas.FlushCache()
@@ -427,6 +429,15 @@ class ConvertDemToGeotiff:
 
         return xml_paths
 
+    def dem_to_terrain_rgb(self):
+        pass
+
+    def to_rgb_tiles(self):
+        pass
+
+    def to_mbtiles(self):
+        pass
+
     def all_exe(self):
         """処理を一括で行い、選択されたディレクトリに入っているxmlをGeoTiffにコンバートして指定したディレクトリに吐き出す
 
@@ -450,5 +461,5 @@ class ConvertDemToGeotiff:
 
         self.resampling(self.import_epsg, self.output_epsg)
 
-        merge_tiff_path = os.path.join(self.output_path, 'merge.tif')
-        warp_tiff_path = os.path.join(self.output_path, 'warp.tif')
+        self.merge_tiff_path = os.path.join(self.output_path, 'dem_epsg4326.tif')
+        self.warp_tiff_path = os.path.join(self.output_path, 'dem_warped.tif')
