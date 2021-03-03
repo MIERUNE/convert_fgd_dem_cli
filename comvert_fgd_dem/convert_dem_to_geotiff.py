@@ -1,4 +1,5 @@
 import os
+import subprocess
 import xml.etree.ElementTree as et
 import zipfile
 from pathlib import Path
@@ -97,7 +98,7 @@ class ConvertDemToGeotiff:
                  import_path="./DEM/",
                  output_path="./GeoTiff",
                  import_epsg="EPSG:4326",
-                 output_epsg="EPSG:4326"):
+                 output_epsg="EPSG:3857"):
         self.import_path: Path = Path(import_path)
         self.output_path: Path = Path(output_path)
         self.import_epsg: str = import_epsg
@@ -300,7 +301,7 @@ class ConvertDemToGeotiff:
         # ディスクへの書き出し
         dst_ds.FlushCache()
 
-    def resampling(self, src_epsg, output_epsg):
+    def resampling(self, src_epsg, output_epsg, nodata):
         """inとoutのepsgコードを受け取りdem_epsg4326.tifをresamplingした新たなGeoTiffを出力する
 
         Args:
@@ -308,9 +309,11 @@ class ConvertDemToGeotiff:
             output_epsg:
 
         """
-        warp_path = os.path.join(self.output_path, 'dem_warped.tif')
+        file_name = "".join(f'dem_{self.output_epsg.lower()}.tif'.split(":"))
+        warp_path = os.path.join(self.output_path, file_name)
         src_path = os.path.join(self.output_path, 'dem_epsg4326.tif')
-        resampledRas = gdal.Warp(warp_path, src_path, srcSRS=src_epsg, dstSRS=output_epsg, resampleAlg="near")
+        resampledRas = gdal.Warp(warp_path, src_path, srcSRS=src_epsg, dstSRS=output_epsg, dstNodata=nodata,
+                                 resampleAlg="near")
 
         resampledRas.FlushCache()
         resampledRas = None
@@ -430,7 +433,20 @@ class ConvertDemToGeotiff:
         return xml_paths
 
     def dem_to_terrain_rgb(self):
-        pass
+        src_path = os.path.join(self.output_path, 'dem_epsg4326.tif')
+
+        filled_dem = "".join(f'dem_{self.output_epsg.lower()}_nodata_none.tif'.split(":"))
+        warp_path = os.path.join(self.output_path, filled_dem)
+
+        warp_cmd = f"gdalwarp -overwrite -t_srs {self.output_epsg} -dstnodata None {src_path} {warp_path}"
+        subprocess.check_output(warp_cmd, shell=True)
+
+        rgb_name = "".join(f'dem_{self.output_epsg.lower()}_rgbify.tif'.split(":"))
+        rgb_path = os.path.join(self.output_path, rgb_name)
+
+        rio_cmd = f"rio rgbify -b -10000 -i 0.1 {warp_path} {rgb_path}"
+
+        subprocess.check_output(rio_cmd, shell=True)
 
     def to_rgb_tiles(self):
         pass
@@ -459,7 +475,9 @@ class ConvertDemToGeotiff:
             self.content_list
         )
 
-        self.resampling(self.import_epsg, self.output_epsg)
+        self.resampling(self.import_epsg, self.output_epsg, nodata=-9999)
 
         self.merge_tiff_path = os.path.join(self.output_path, 'dem_epsg4326.tif')
-        self.warp_tiff_path = os.path.join(self.output_path, 'dem_warped.tif')
+        self.warp_tiff_path = os.path.join(self.output_path, "".join(f'dem_{self.output_epsg.lower()}.tif'.split(":")))
+
+        self.dem_to_terrain_rgb()
