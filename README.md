@@ -7,7 +7,6 @@
 ```shell
 % brew install gdal
 % pipenv sync
-% pip install rio-rgbify
 ```
 
 ## Usage
