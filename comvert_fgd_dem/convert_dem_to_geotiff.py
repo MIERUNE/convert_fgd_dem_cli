@@ -9,16 +9,35 @@ from osgeo import gdal, osr
 
 
 class Dem:
+    """DEMのxmlからメタデータを取り出すクラス
+
+    """
+
     def __init__(self, xml_path):
+        """イニシャライザ
+
+        Args:
+            xml_path (Path): xmlファイルへパスオブジェクト
+        """
         self.xml_path: Path = xml_path
         self.raw_metadata: dict = {}
-        self.contents: list = []
+        self.elevation: list = []
         self._read_dem()
 
-        self.meta_data: dict = {}
-        self.metadata_parser()
+        self.meta_data: dict = {
+            'mesh_cord': None,
+            "lower_corner": None,
+            "upper_corner": None,
+            "grid_length": None,
+            'start_point': None,
+            "pixel_size": None,
+        }
+        self.format_metadata()
 
     def _read_dem(self):
+        """demを読み込んでメタデータを取得する
+
+        """
         name_space = {
             'dataset': "http://fgd.gsi.go.jp/spec/2008/FGD_GMLSchema",
             'gml': 'http://www.opengis.net/gml/3.2',
@@ -27,31 +46,33 @@ class Dem:
         tree = et.parse(self.xml_path)
         root = tree.getroot()
 
-        raw_metadata = {}
+        raw_metadata = {
+            "mesh_code": int(root.find('dataset:DEM//dataset:mesh', name_space).text),
+            "lower_corner": root.find('dataset:DEM//dataset:coverage//gml:boundedBy//gml:Envelope//gml:lowerCorner',
+                                      name_space).text,
+            "upper_corner": root.find('dataset:DEM//dataset:coverage//gml:boundedBy//gml:Envelope//gml:upperCorner',
+                                      name_space).text,
+            "grid_length": root.find('dataset:DEM//dataset:coverage//gml:gridDomain//gml:Grid//gml:high',
+                                     name_space).text,
+            "start_point": root.find(
+                'dataset:DEM//dataset:coverage//gml:coverageFunction//gml:GridFunction//gml:startPoint',
+                name_space).text
+        }
 
-        raw_metadata["mesh_code"] = int(root.find('dataset:DEM//dataset:mesh', name_space).text)
-        raw_metadata["lower_corner"] = root.find(
-            'dataset:DEM//dataset:coverage//gml:boundedBy//gml:Envelope//gml:lowerCorner',
-            name_space).text
-        raw_metadata["upper_corner"] = root.find(
-            'dataset:DEM//dataset:coverage//gml:boundedBy//gml:Envelope//gml:upperCorner',
-            name_space).text
-        raw_metadata["grid_length"] = root.find('dataset:DEM//dataset:coverage//gml:gridDomain//gml:Grid//gml:high',
-                                                name_space).text
-        raw_metadata["start_point"] = root.find(
-            'dataset:DEM//dataset:coverage//gml:coverageFunction//gml:GridFunction//gml:startPoint',
-            name_space).text
-
-        content = root.find('dataset:DEM//dataset:coverage//gml:rangeSet//gml:DataBlock//gml:tupleList',
-                            name_space).text
-        if content.startswith("\n"):
-            strip_content = content.strip()
-            content_list = [item.split(',') for item in strip_content.split("\n")]
-            self.contents = content_list
+        elevation = root.find('dataset:DEM//dataset:coverage//gml:rangeSet//gml:DataBlock//gml:tupleList',
+                              name_space).text
+        # gml:tupleList先頭の改行を削除したのち、[[地表面,354.15]...]のようなlistのlistを作成
+        if elevation.startswith("\n"):
+            strip_elevation = elevation.strip()
+            elevation_list = [item.split(',') for item in strip_elevation.split("\n")]
+            self.elevation = elevation_list
 
         self.raw_metadata = raw_metadata
 
-    def metadata_parser(self):
+    def format_metadata(self):
+        """取得した生のメタデータを整形する
+
+        """
         lowers = self.raw_metadata["lower_corner"].split(" ")
         lower_corner = {
             "lat": float(lowers[0]),
@@ -177,7 +198,7 @@ class ConvertDemToGeotiff:
         meta_data = dem_instance.meta_data
         mesh_cord = meta_data["mesh_cord"]
 
-        contents = dem_instance.contents
+        contents = dem_instance.elevation
         elevations = [c[1] for c in contents]
 
         x_len = meta_data['grid_length']['x']
@@ -447,12 +468,6 @@ class ConvertDemToGeotiff:
         rio_cmd = f"rio rgbify -b -10000 -i 0.1 {warp_path} {rgb_path}"
 
         subprocess.check_output(rio_cmd, shell=True)
-
-    def to_rgb_tiles(self):
-        pass
-
-    def to_mbtiles(self):
-        pass
 
     def all_exe(self):
         """処理を一括で行い、選択されたディレクトリに入っているxmlをGeoTiffにコンバートして指定したディレクトリに吐き出す
