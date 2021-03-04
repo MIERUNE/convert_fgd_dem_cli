@@ -19,7 +19,7 @@ Run the tool with downloaded "xml" or "directory containing .xml" or ".zip conta
 ## Usage
 
 ```shell
-% pipenv run python -m comvert_fgd_dem
+% pipenv run python -m convert_fgd_dem
 ```
 
 If it doesn't work, reinstall.
@@ -36,7 +36,7 @@ If it doesn't work, reinstall.
 ## help
 
 ```shell
-% pipenv run python -m comvert_fgd_dem --help
+% pipenv run python -m convert_fgd_dem --help
 Usage: __main__.py [OPTIONS]
 
 Options:
