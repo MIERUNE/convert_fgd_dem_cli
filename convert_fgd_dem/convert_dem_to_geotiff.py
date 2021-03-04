@@ -24,38 +24,31 @@ class ConvertDemToGeotiff:
         self.import_epsg: str = import_epsg
         self.output_epsg: str = output_epsg
 
-        self.pixel_size_x: float = 0.0
-        self.pixel_size_y: float = 0.0
-        self.merge_tiff_path: Path = None
-        self.warp_tiff_path: Path = None
-
         self.dem = Dem(self.import_path)
         self.mesh_codes: list = self.dem.mesh_code_list
         self.meta_data_list: list = self.dem.meta_data_list
         self.np_array_list: list = self.dem.np_array_list
         self.bounds_latlng: dict = self.dem.bounds_latlng
 
-    def calc_grid_cell_size(self, pixel_size_x, pixel_size_y, bounds_latlng):
-        """対象の全Demの座標を取得し、出力画像の大きさを算出する
+        self.pixel_size_x: float = self.meta_data_list[0]['pixel_size']['x']
+        self.pixel_size_y: float = self.meta_data_list[0]['pixel_size']['y']
 
-        Args:
-            pixel_size_x: x方向のピクセルサイズ
-            pixel_size_y: y方向のピクセルサイズ
-            bounds_latlng: 緯度経度の最大・最小値が格納された辞書
+    def _calc_grid_cell_size(self):
+        """Dem境界の緯度経度とピクセルサイズから出力画像の大きさを算出する
 
         Returns:
             tuple: x/y方向の画像の大きさ
 
         """
-        lower_left_lat = bounds_latlng["lower_left"]["lat"]
-        lower_left_lon = bounds_latlng["lower_left"]["lon"]
-        upper_right_lat = bounds_latlng["upper_right"]["lat"]
-        upper_right_lon = bounds_latlng["upper_right"]["lon"]
+        lower_left_lat = self.bounds_latlng["lower_left"]["lat"]
+        lower_left_lon = self.bounds_latlng["lower_left"]["lon"]
+        upper_right_lat = self.bounds_latlng["upper_right"]["lat"]
+        upper_right_lon = self.bounds_latlng["upper_right"]["lon"]
 
-        x_len = round(abs((upper_right_lon - lower_left_lon) / pixel_size_x))
-        y_len = round(abs((upper_right_lat - lower_left_lat) / pixel_size_y))
+        x_length = round(abs((upper_right_lon - lower_left_lon) / self.pixel_size_x))
+        y_length = round(abs((upper_right_lat - lower_left_lat) / self.pixel_size_y))
 
-        return x_len, y_len
+        return x_length, y_length
 
     def write_geotiff(self, np_array, lower_left_lon, upper_right_lat, pixel_size_x, pixel_size_y, x_len, y_len):
         """標高と座標、ピクセルサイズ、グリッドサイズからGeoTiffを作成
@@ -100,24 +93,25 @@ class ConvertDemToGeotiff:
         # ディスクへの書き出し
         dst_ds.FlushCache()
 
-    def resampling(self, src_epsg, output_epsg, nodata):
+    def resampling(self, src_epsg, output_epsg, no_data):
         """inとoutのepsgコードを受け取りdem_epsg4326.tifをresamplingした新たなGeoTiffを出力する
 
         Args:
             src_epsg:
             output_epsg:
+            no_data:
 
         """
         file_name = "".join(f'dem_{self.output_epsg.lower()}.tif'.split(":"))
         warp_path = os.path.join(self.output_path, file_name)
         src_path = os.path.join(self.output_path, 'dem_epsg4326.tif')
-        resampledRas = gdal.Warp(warp_path, src_path, srcSRS=src_epsg, dstSRS=output_epsg, dstNodata=nodata,
-                                 resampleAlg="near")
+        resampled_ras = gdal.Warp(warp_path, src_path, srcSRS=src_epsg, dstSRS=output_epsg, dstNodata=no_data,
+                                  resampleAlg="near")
 
-        resampledRas.FlushCache()
-        resampledRas = None
+        resampled_ras.FlushCache()
 
-    def combine_meta_data_and_contents(self, meta_data_list, contents_list):
+    @staticmethod
+    def combine_meta_data_and_contents(meta_data_list, contents_list):
         """メッシュコードが同一のメタデータと標高値を結合する
 
         Args:
@@ -228,25 +222,23 @@ class ConvertDemToGeotiff:
         """処理を一括で行い、選択されたディレクトリに入っているxmlをGeoTiffにコンバートして指定したディレクトリに吐き出す
 
         """
-        self.pixel_size_x = self.meta_data_list[0]['pixel_size']['x']
-        self.pixel_size_y = self.meta_data_list[0]['pixel_size']['y']
+        x_length, y_length = self._calc_grid_cell_size()
 
-        grid_cell_size = self.calc_grid_cell_size(self.pixel_size_x, self.pixel_size_y, self.bounds_latlng)
+        bounds_values = [
+            self.bounds_latlng["lower_left"]["lat"],
+            self.bounds_latlng["lower_left"]["lon"],
+            self.bounds_latlng["upper_right"]["lat"],
+            self.bounds_latlng["upper_right"]["lon"]
+        ]
 
-        lower_left_lat = self.bounds_latlng["lower_left"]["lat"]
-        lower_left_lon = self.bounds_latlng["lower_left"]["lon"]
-        upper_right_lat = self.bounds_latlng["upper_right"]["lat"]
-        upper_right_lon = self.bounds_latlng["upper_right"]["lon"]
-        bounds_values = [lower_left_lat, lower_left_lon, upper_right_lat, upper_right_lon]
-
-        large_mesh_contents_list = self.find_coordinates_in_large_mesh(
-            grid_cell_size,
+        _ = self.find_coordinates_in_large_mesh(
+            (x_length, y_length),
             bounds_values,
             self.meta_data_list,
             self.np_array_list
         )
 
-        self.resampling(self.import_epsg, self.output_epsg, nodata=-9999)
+        self.resampling(self.import_epsg, self.output_epsg, no_data=-9999)
 
         self.merge_tiff_path = os.path.join(self.output_path, 'dem_epsg4326.tif')
         self.warp_tiff_path = os.path.join(self.output_path, "".join(f'dem_{self.output_epsg.lower()}.tif'.split(":")))
