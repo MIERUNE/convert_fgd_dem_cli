@@ -3,7 +3,7 @@
 ## Overview
 
 You can get the DEM data in xml format for any location from the following site.
-(https://fgd.gsi.go.jp/download/mapGis.php?tab=dem)[https://fgd.gsi.go.jp/download/mapGis.php?tab=dem]
+[https://fgd.gsi.go.jp/download/mapGis.php?tab=dem](https://fgd.gsi.go.jp/download/mapGis.php?tab=dem)
 
 Run the tool with downloaded "xml" or "directory containing .xml" or ".zip containing .xml" to generate GeoTiff and Terrain RGB (Tiff).
 
