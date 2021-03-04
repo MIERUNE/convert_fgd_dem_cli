@@ -23,15 +23,17 @@ class ConvertDemToGeotiff:
         self.output_path: Path = Path(output_path)
         self.import_epsg: str = import_epsg
         self.output_epsg: str = output_epsg
-        self.mesh_codes: list = []
-        self.meta_data_list: list = []
-        self.np_array_list: list = []
-        self.bounds_latlng: dict = {}
+
         self.pixel_size_x: float = 0.0
         self.pixel_size_y: float = 0.0
         self.merge_tiff_path: Path = None
         self.warp_tiff_path: Path = None
+
         self.dem = Dem(self.import_path)
+        self.mesh_codes: list = self.dem.mesh_code_list
+        self.meta_data_list: list = self.dem.meta_data_list
+        self.np_array_list: list = self.dem.np_array_list
+        self.bounds_latlng: dict = self.dem.bounds_latlng
 
     def calc_grid_cell_size(self, pixel_size_x, pixel_size_y, bounds_latlng):
         """対象の全Demの座標を取得し、出力画像の大きさを算出する
@@ -226,11 +228,6 @@ class ConvertDemToGeotiff:
         """処理を一括で行い、選択されたディレクトリに入っているxmlをGeoTiffにコンバートして指定したディレクトリに吐き出す
 
         """
-        self.mesh_codes = self.dem.mesh_code_list
-        self.meta_data_list = self.dem.meta_data_list
-        self.np_array_list = self.dem.np_array_list
-        self.bounds_latlng = self.dem.bounds_latlng
-
         self.pixel_size_x = self.meta_data_list[0]['pixel_size']['x']
         self.pixel_size_y = self.meta_data_list[0]['pixel_size']['y']
 
