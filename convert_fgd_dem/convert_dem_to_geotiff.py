@@ -1,6 +1,5 @@
 import os
 import subprocess
-import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -24,8 +23,6 @@ class ConvertDemToGeotiff:
         self.output_path: Path = Path(output_path)
         self.import_epsg: str = import_epsg
         self.output_epsg: str = output_epsg
-        self.xml_paths: list = self._get_xml_paths_from_import_path()
-        self.dem_instances: list = [Dem(xml_path) for xml_path in self.xml_paths]
         self.mesh_codes: list = []
         self.meta_data_list: list = []
         self.np_array_list: list = []
@@ -208,29 +205,6 @@ class ConvertDemToGeotiff:
                            large_mesh_pixel_size_y, large_mesh_x_len, large_mesh_y_len)
 
         return large_mesh_np_array
-
-    def _get_xml_paths_from_import_path(self):
-        """指定したパスからxmlのPathオブジェクトのリストを作成
-
-        """
-        if self.import_path.is_dir():
-            xml_paths = [xml_path for xml_path in self.import_path.glob("*.xml")]
-            if xml_paths is None:
-                raise Exception("指定ディレクトリに.xmlが存在しません")
-
-        elif self.import_path.suffix == ".xml":
-            xml_paths = [self.import_path]
-
-        elif self.import_path.suffix == ".zip":
-            with zipfile.ZipFile(self.import_path, 'r') as zip_data:
-                zip_data.extractall(path=self.import_path.parent)
-                extract_dir = self.import_path.parent / self.import_path.stem
-                xml_paths = [xml_path for xml_path in extract_dir.glob("*.xml")]
-
-        else:
-            raise Exception("指定できる形式は「xml」「.xmlが格納されたディレクトリ」「.xmlが格納された.zip」のみです")
-
-        return xml_paths
 
     def dem_to_terrain_rgb(self):
         src_path = os.path.join(self.output_path, 'dem_epsg4326.tif')
