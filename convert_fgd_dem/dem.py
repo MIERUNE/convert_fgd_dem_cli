@@ -16,6 +16,10 @@ class Dem:
         Args:
             import_path (Path): 取り込み対象のパスオブジェクト
 
+        Notes:
+            「meta_data」とはDEMを構成する「メッシュコード・左下と右上の緯度経度・グリッドサイズ・初期位置・ピクセルサイズ」のことを指す
+            「content」とはメッシュコード・メタデータ・標高値のことを指す
+
         """
         self.import_path: Path = import_path
         self.xml_paths: list = self._get_xml_paths()
@@ -27,10 +31,10 @@ class Dem:
         self._get_xml_content_list()
 
         self.np_array_list: list = []
-        self._get_np_array_list()
+        self._store_np_array_list()
 
-        self.min_max_latlng: dict = {}
-        self._get_max_min_latlon()
+        self.bounds_latlng: dict = {}
+        self._store_bounds_latlng()
 
     def _get_xml_paths(self):
         """指定したパスからxmlのPathオブジェクトのリストを作成
@@ -110,7 +114,7 @@ class Dem:
         return meta_data
 
     def get_xml_content(self, xml_path):
-        """xmlを読み込んでメタデータを取得する
+        """xmlを読み込んでメッシュコード・メタデータ・標高値を取得する
 
         Args:
             xml_path (Path):　xmlのパスオブジェクト
@@ -159,7 +163,7 @@ class Dem:
 
         elevation = {
             "mesh_code": mesh_code,
-            "elevation": items
+            "items": items
         }
 
         return {
@@ -169,10 +173,7 @@ class Dem:
         }
 
     def _check_mesh_codes(self):
-        """ファイルパスのリストからメッシュコードのリストを取得する
-
-        Returns:
-            list: メッシュコードのリスト
+        """2次メッシュと3次メッシュの重複をチェックする
 
         Raises:
             - メッシュコードが6桁 or 8桁以外の場合はエラー
@@ -200,28 +201,34 @@ class Dem:
 
         """
         self.all_content_list = [self.get_xml_content(xml_path) for xml_path in self.xml_paths]
+
         self.mesh_code_list = [item["mesh_code"] for item in self.all_content_list]
         self._check_mesh_codes()
+
         self.meta_data_list = [item["meta_data"] for item in self.all_content_list]
         self.elevation_list = [item["elevation"] for item in self.all_content_list]
 
-    def _get_max_min_latlon(self):
+    def _store_bounds_latlng(self):
         """対象の全Demから緯度経度の最大・最小値を取得
 
         """
-        lower_left_lat_min = min([meta_data['lower_corner']['lat'] for meta_data in self.meta_data_list])
-        lower_left_lon_min = min([meta_data['lower_corner']['lon'] for meta_data in self.meta_data_list])
-        upper_right_lat_max = max([meta_data['upper_corner']['lat'] for meta_data in self.meta_data_list])
-        upper_right_lon_max = max([meta_data['upper_corner']['lon'] for meta_data in self.meta_data_list])
+        lower_left_lat = min([meta_data['lower_corner']['lat'] for meta_data in self.meta_data_list])
+        lower_left_lon = min([meta_data['lower_corner']['lon'] for meta_data in self.meta_data_list])
+        upper_right_lat = max([meta_data['upper_corner']['lat'] for meta_data in self.meta_data_list])
+        upper_right_lon = max([meta_data['upper_corner']['lon'] for meta_data in self.meta_data_list])
 
-        min_max_latlng = {
-            "lower_left_lat_min": lower_left_lat_min,
-            "lower_left_lon_min": lower_left_lon_min,
-            "upper_right_lat_max": upper_right_lat_max,
-            "upper_right_lon_max": upper_right_lon_max,
+        bounds_latlng = {
+            "lower_left": {
+                "lat": lower_left_lat,
+                "lon": lower_left_lon
+            },
+            "upper_right": {
+                "lat": upper_right_lat,
+                "lon": upper_right_lon
+            },
         }
 
-        self.min_max_latlng = min_max_latlng
+        self.bounds_latlng = bounds_latlng
 
     @staticmethod
     def _get_np_array(content):
@@ -234,20 +241,15 @@ class Dem:
             dict: メッシュコードと標高値（np.array）を格納した辞書
 
         """
-        np_array = {
-            "mesh_code": None,
-            "np_array": None
-        }
-
         mesh_code = content["mesh_code"]
         meta_data = content["meta_data"]
-        elevation = content["elevation"]["elevation"]
+        elevation = content["elevation"]["items"]
 
-        x_len = meta_data['grid_length']['x']
-        y_len = meta_data['grid_length']['y']
+        x_length = meta_data['grid_length']['x']
+        y_length = meta_data['grid_length']['y']
 
         # 標高地を保存するための二次元配列を作成
-        array = np.empty((y_len, x_len), np.float32)
+        array = np.empty((y_length, x_length), np.float32)
         array.fill(-9999)
 
         start_point_x = meta_data['start_point']['x']
@@ -256,19 +258,21 @@ class Dem:
         # 標高を格納
         # データの並びは北西端から南東端に向かっているので行毎に座標を配列に入れていく
         index = 0
-        for y in range(start_point_y, y_len):
-            for x in range(start_point_x, x_len):
+        for y in range(start_point_y, y_length):
+            for x in range(start_point_x, x_length):
                 insert_value = float(elevation[index])
                 array[y][x] = insert_value
                 index += 1
             start_point_x = 0
 
-        np_array['mesh_code'] = mesh_code
-        np_array['np_array'] = array
+        np_array = {
+            'mesh_code': mesh_code,
+            'np_array': array
+        }
 
         return np_array
 
-    def _get_np_array_list(self):
+    def _store_np_array_list(self):
         """Demからメッシュコードと標高値のnp.arrayを格納した辞書のリストを作成する
 
         """

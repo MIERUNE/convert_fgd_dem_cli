@@ -9,6 +9,11 @@ from osgeo import gdal, osr
 from .dem import Dem
 
 
+class GeoTiff:
+    def __init__(self):
+        pass
+
+
 class ConvertDemToGeotiff:
     def __init__(self,
                  import_path="./DEM/",
@@ -24,151 +29,29 @@ class ConvertDemToGeotiff:
         self.mesh_codes: list = []
         self.meta_data_list: list = []
         self.np_array_list: list = []
-        self.min_max_latlng: dict = {}
+        self.bounds_latlng: dict = {}
         self.pixel_size_x: float = 0.0
         self.pixel_size_y: float = 0.0
         self.merge_tiff_path: Path = None
         self.warp_tiff_path: Path = None
         self.dem = Dem(self.import_path)
 
-    def get_mesh_codes(self):
-        """ファイルパスのリストからメッシュコードのリストを取得する
-
-        Returns:
-            list: メッシュコードのリスト
-
-        Raises:
-            - メッシュコードが6桁 or 8桁以外の場合はエラー
-            - 2次メッシュと3次メッシュが混合している場合にエラー
-
-        """
-        third_mesh_codes = []
-        second_mesh_codes = []
-
-        for dem in self.dem_instances:
-            mesh_code = dem.meta_data["mesh_code"]
-            str_mesh = str(mesh_code)
-            if len(str_mesh) == 6:
-                second_mesh_codes.append(mesh_code)
-            elif len(str_mesh) == 8:
-                third_mesh_codes.append(mesh_code)
-            else:
-                raise Exception(f"メッシュコードが不正です。mesh_code={mesh_code}")
-
-        # どちらもTrue、つまり要素が存在しているときにraise
-        if all((third_mesh_codes, second_mesh_codes)):
-            raise Exception('2次メッシュと3次メッシュが混合しています。')
-
-        elif not third_mesh_codes:
-            second_mesh_codes.sort()
-            return second_mesh_codes
-        else:
-            third_mesh_codes.sort()
-            return third_mesh_codes
-
-    def get_metadata_list(self):
-        """メタデータのリストを取得する
-
-        Returns:
-            list: メタデータのリスト
-
-        """
-        mesh_metadata_list = [dem.meta_data for dem in self.dem_instances]
-        return mesh_metadata_list
-
-    def _get_contents(self, dem_instance):
-        """Demから標高値を取得し、メッシュコードと標高値（np.array）を格納した辞書を返す
-
-        Args:
-            dem_instance(Dem): Demクラスのインスタンス
-
-        Returns:
-            dict: メッシュコードと標高値（np.array）を格納した辞書
-
-        """
-        contents_dict = {
-            "mesh_code": None,
-            "np_array": None
-        }
-
-        meta_data = dem_instance.meta_data
-        mesh_code = meta_data["mesh_code"]
-
-        contents = dem_instance.elevation
-        elevations = [c[1] for c in contents]
-
-        x_len = meta_data['grid_length']['x']
-        y_len = meta_data['grid_length']['y']
-
-        # 標高地を保存するための二次元配列を作成
-        np_array = np.empty((y_len, x_len), np.float32)
-        np_array.fill(-9999)
-
-        start_point_x = meta_data['start_point']['x']
-        start_point_y = meta_data['start_point']['y']
-
-        # 標高を格納
-        # データの並びは北西端から南東端に向かっているので行毎に座標を配列に入れていく
-        index = 0
-        for y in range(start_point_y, y_len):
-            for x in range(start_point_x, x_len):
-                insert_value = float(elevations[index])
-                np_array[y][x] = insert_value
-                index += 1
-            start_point_x = 0
-
-        contents_dict['mesh_code'] = mesh_code
-        contents_dict['np_array'] = np_array
-
-        return contents_dict
-
-    def get_contents_list(self):
-        """Demからメッシュコードと標高値のnp.arrayを格納した辞書のリストを作成する
-
-        Returns:
-            list: メッシュコードと標高値のnp.arrayを格納した辞書のリスト
-
-        """
-        mesh_contents_list = [self._get_contents(dem) for dem in self.dem_instances]
-        return mesh_contents_list
-
-    def find_max_min_latlon_from_all_dems(self):
-        """対象の全Demから緯度経度の最大・最小値を取得
-
-        Returns:
-            dict: 緯度経度の最大・最小値を格納した辞書
-
-        """
-        lower_left_lat_min = min([meta_data['lower_corner']['lat'] for meta_data in self.meta_data_list])
-        lower_left_lon_min = min([meta_data['lower_corner']['lon'] for meta_data in self.meta_data_list])
-        upper_right_lat_max = max([meta_data['upper_corner']['lat'] for meta_data in self.meta_data_list])
-        upper_right_lon_max = max([meta_data['upper_corner']['lon'] for meta_data in self.meta_data_list])
-
-        min_max_latlng = {
-            "lower_left_lat_min": lower_left_lat_min,
-            "lower_left_lon_min": lower_left_lon_min,
-            "upper_right_lat_max": upper_right_lat_max,
-            "upper_right_lon_max": upper_right_lon_max,
-        }
-
-        return min_max_latlng
-
-    def calc_grid_cell_size(self, pixel_size_x, pixel_size_y, min_max_latlng):
+    def calc_grid_cell_size(self, pixel_size_x, pixel_size_y, bounds_latlng):
         """対象の全Demの座標を取得し、出力画像の大きさを算出する
 
         Args:
             pixel_size_x: x方向のピクセルサイズ
             pixel_size_y: y方向のピクセルサイズ
-            min_max_latlng: 緯度経度の最大・最小値が格納された辞書
+            bounds_latlng: 緯度経度の最大・最小値が格納された辞書
 
         Returns:
             tuple: x/y方向の画像の大きさ
 
         """
-        lower_left_lat = min_max_latlng["lower_left_lat_min"]
-        lower_left_lon = min_max_latlng["lower_left_lon_min"]
-        upper_right_lat = min_max_latlng["upper_right_lat_max"]
-        upper_right_lon = min_max_latlng["upper_right_lon_max"]
+        lower_left_lat = bounds_latlng["lower_left"]["lat"]
+        lower_left_lon = bounds_latlng["lower_left"]["lon"]
+        upper_right_lat = bounds_latlng["upper_right"]["lat"]
+        upper_right_lon = bounds_latlng["upper_right"]["lon"]
 
         x_len = round(abs((upper_right_lon - lower_left_lon) / pixel_size_x))
         y_len = round(abs((upper_right_lat - lower_left_lat) / pixel_size_y))
@@ -369,23 +252,25 @@ class ConvertDemToGeotiff:
         """処理を一括で行い、選択されたディレクトリに入っているxmlをGeoTiffにコンバートして指定したディレクトリに吐き出す
 
         """
-        # self.mesh_codes = self.get_mesh_codes()
-        # self.meta_data_list = self.get_metadata_list()
-        # self.content_list = self.get_contents_list()
-        # self.min_max_latlng = self.find_max_min_latlon_from_all_dems()
         self.mesh_codes = self.dem.mesh_code_list
         self.meta_data_list = self.dem.meta_data_list
         self.np_array_list = self.dem.np_array_list
-        self.min_max_latlng = self.dem.min_max_latlng
+        self.bounds_latlng = self.dem.bounds_latlng
 
         self.pixel_size_x = self.meta_data_list[0]['pixel_size']['x']
         self.pixel_size_y = self.meta_data_list[0]['pixel_size']['y']
 
-        grid_cell_size = self.calc_grid_cell_size(self.pixel_size_x, self.pixel_size_y, self.min_max_latlng)
+        grid_cell_size = self.calc_grid_cell_size(self.pixel_size_x, self.pixel_size_y, self.bounds_latlng)
+
+        lower_left_lat = self.bounds_latlng["lower_left"]["lat"]
+        lower_left_lon = self.bounds_latlng["lower_left"]["lon"]
+        upper_right_lat = self.bounds_latlng["upper_right"]["lat"]
+        upper_right_lon = self.bounds_latlng["upper_right"]["lon"]
+        bounds_values = [lower_left_lat, lower_left_lon, upper_right_lat, upper_right_lon]
 
         large_mesh_contents_list = self.find_coordinates_in_large_mesh(
             grid_cell_size,
-            list(self.min_max_latlng.values()),
+            bounds_values,
             self.meta_data_list,
             self.np_array_list
         )
@@ -404,23 +289,3 @@ class ConvertDemToGeotiff:
 # 全xml分の大きさを持つ空のセルに各xmlの標高値を右上から格納していき、得られたセル・緯度経度・グリッドサイズなどの情報をもとにGeoTiffを作成。
 # GeoTiffを指定のsridにwarpする
 # GeoTiffをTerrain RGB形式に変換する
-
-# Demクラス
-# - 属性
-# xmlへのパス・メッシュコード・メタデータ・標高値・左下と右上の緯度経度・グリッドサイズ・標高値のスタート地点
-# - 操作
-# ピクセルサイズを生成
-
-# MultipleDemクラス
-# - 属性
-# DEMクラスのリスト・Demクラスで持っている属性の複数DEM版
-# - 操作
-# Demクラスの属性をマージ
-
-# GeoTiffクラス
-# - 属性
-# ピクセル毎の値・左下と右上の緯度経度・ピクセルサイズ・グリッドサイズ・srid・GeoTiffへのパス
-# - 操作
-# GeoJSONを生成
-# 投影法を変更する
-# その他gdalでできること全て…
