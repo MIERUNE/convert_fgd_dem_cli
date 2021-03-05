@@ -46,7 +46,7 @@ class ConvertDemToGeotiff:
         return x_length, y_length
 
     @staticmethod
-    def combine_meta_data_and_contents(meta_data_list, contents_list):
+    def _combine_meta_data_and_contents(meta_data_list, contents_list):
         """メッシュコードが同一のメタデータと標高値を結合する
 
         Args:
@@ -68,7 +68,7 @@ class ConvertDemToGeotiff:
 
         return mesh_data_list
 
-    def find_coordinates_in_large_mesh(self, grid_cell_size, min_max_latlng, metadata_list, contents_list):
+    def create_geojson(self, grid_cell_size, min_max_latlng, metadata_list, contents_list):
         """対象のDemを全て取り込んだnp.arrayを作成する
 
         Args:
@@ -104,7 +104,7 @@ class ConvertDemToGeotiff:
         large_mesh_pixel_size_y = (large_mesh_lower_left_lat - large_mesh_upper_right_lat) / large_mesh_y_len
 
         # メタデータと標高値を結合
-        mesh_data_list = self.combine_meta_data_and_contents(metadata_list, contents_list)
+        mesh_data_list = self._combine_meta_data_and_contents(metadata_list, contents_list)
 
         # メッシュのメッシュコードを取り出す
         for mesh_data in mesh_data_list:
@@ -172,7 +172,7 @@ class ConvertDemToGeotiff:
             self.bounds_latlng["upper_right"]["lon"]
         ]
 
-        geotiff = self.find_coordinates_in_large_mesh(
+        geotiff = self.create_geojson(
             (x_length, y_length),
             bounds_values,
             self.meta_data_list,
@@ -180,8 +180,5 @@ class ConvertDemToGeotiff:
         )
 
         geotiff.resampling()
-
-        self.merge_tiff_path = os.path.join(self.output_path, 'dem_epsg4326.tif')
-        self.warp_tiff_path = os.path.join(self.output_path, "".join(f'dem_{self.output_epsg.lower()}.tif'.split(":")))
 
         self.dem_to_terrain_rgb()
