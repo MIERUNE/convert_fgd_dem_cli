@@ -15,11 +15,11 @@ class ConvertDemToGeotiffTest(unittest.TestCase):
 
     def test_geotiff(self):
         cd = ConvertDemToGeotiff(
-            import_path=Path("../DEM/FG-GML-6441-32-DEM5A.zip"),
-            output_path=Path("../GeoTiff/"),
+            import_path=Path("./target_files/FG-GML-6441-32-DEM5A.zip"),
+            output_path=Path("./test_generated"),
         )
         cd.all_exe()
-        geotiff_path = Path("../GeoTiff/dem_epsg4326.tif")
+        geotiff_path = Path("./test_generated/dem_epsg4326.tif")
         src = gdal.Open(str(geotiff_path.resolve()), gdalconst.GA_ReadOnly)
         x_length = src.RasterXSize
         y_length = src.RasterYSize

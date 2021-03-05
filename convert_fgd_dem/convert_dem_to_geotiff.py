@@ -68,7 +68,7 @@ class ConvertDemToGeotiff:
 
         return mesh_data_list
 
-    def create_data_for_geotiff(self, grid_cell_size, min_max_latlng, metadata_list, contents_list):
+    def create_geotiff(self, grid_cell_size, min_max_latlng, metadata_list, contents_list):
         """対象のDemを全て取り込んだnp.arrayを作成する
 
         Args:
@@ -171,7 +171,7 @@ class ConvertDemToGeotiff:
             self.bounds_latlng["upper_right"]["lon"]
         ]
 
-        data_for_geotiff = self.create_data_for_geotiff(
+        data_for_geotiff = self.create_geotiff(
             (x_length, y_length),
             bounds_values,
             self.meta_data_list,
