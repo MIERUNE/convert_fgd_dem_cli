@@ -5,12 +5,12 @@ from pathlib import Path
 import numpy as np
 
 from .dem import Dem
-from .geotiff import GeoTiff
+from .geotiff import Geotiff
 
 
 class ConvertDemToGeotiff:
     def __init__(self,
-                 import_path="./DEM/",
+                 import_path="./DEM/FG-GML-6441-32-DEM5A.zip",
                  output_path="./GeoTiff",
                  import_epsg="EPSG:4326",
                  output_epsg="EPSG:3857"):
@@ -68,7 +68,7 @@ class ConvertDemToGeotiff:
 
         return mesh_data_list
 
-    def create_geojson(self, grid_cell_size, min_max_latlng, metadata_list, contents_list):
+    def create_data_for_geotiff(self, grid_cell_size, min_max_latlng, metadata_list, contents_list):
         """対象のDemを全て取り込んだnp.arrayを作成する
 
         Args:
@@ -138,10 +138,9 @@ class ConvertDemToGeotiff:
             0,
             large_mesh_pixel_size_y
         ]
-        geotiff = GeoTiff(geo_transform, large_mesh_np_array, large_mesh_x_len, large_mesh_y_len, self.output_path)
-        geotiff.write_geotiff()
 
-        return geotiff
+        data_for_geotiff = (geo_transform, large_mesh_np_array, large_mesh_x_len, large_mesh_y_len, self.output_path)
+        return data_for_geotiff
 
     def dem_to_terrain_rgb(self):
         src_path = os.path.join(self.output_path, 'dem_epsg4326.tif')
@@ -172,13 +171,15 @@ class ConvertDemToGeotiff:
             self.bounds_latlng["upper_right"]["lon"]
         ]
 
-        geotiff = self.create_geojson(
+        data_for_geotiff = self.create_data_for_geotiff(
             (x_length, y_length),
             bounds_values,
             self.meta_data_list,
             self.np_array_list
         )
 
+        geotiff = Geotiff(*data_for_geotiff)
+        geotiff.write_geotiff()
         geotiff.resampling()
 
         self.dem_to_terrain_rgb()

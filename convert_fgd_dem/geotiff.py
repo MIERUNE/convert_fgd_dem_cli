@@ -3,10 +3,27 @@ from pathlib import Path
 from osgeo import gdal, osr
 
 
-class GeoTiff:
+class Geotiff:
+    """GeoTiffを生成するためのクラス
+
+    """
+
     def __init__(self, geo_transform, np_array, x_length, y_length, output_path=Path("./GeoTiff")):
-        # [左上経度・東西解像度・回転（０で南北方向）・左上緯度・回転（０で南北方向）・南北解像度（北南方向であれば負）]
-        # geo_transform = [lower_left_lon, pixel_size_x, 0, upper_right_lat, 0, pixel_size_y]
+        """イニシャライザ
+
+        Args:
+            geo_transform (list): GdalのDatasetクラスでSetGeoTransformするための情報
+            np_array ():
+            x_length (int):
+            y_length (int):
+            output_path (Path):
+
+        Notes:
+            geo_transformは以下のような情報
+                geo_transform = [左上経度・東西解像度・回転（０で南北方向）・左上緯度・回転（０で南北方向）・南北解像度（北南方向であれば負）]
+                                [lower_left_lon, pixel_size_x, 0, upper_right_lat, 0, pixel_size_y]
+
+        """
         self.geo_transform = geo_transform
         self.np_array = np_array
         self.x_length = x_length
