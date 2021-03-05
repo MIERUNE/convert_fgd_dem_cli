@@ -9,8 +9,66 @@ from .dem import Dem
 
 
 class GeoTiff:
-    def __init__(self):
-        pass
+    def __init__(self, geo_transform, np_array, x_length, y_length, output_path=Path("./GeoTiff")):
+        # [左上経度・東西解像度・回転（０で南北方向）・左上緯度・回転（０で南北方向）・南北解像度（北南方向であれば負）]
+        # geo_transform = [lower_left_lon, pixel_size_x, 0, upper_right_lat, 0, pixel_size_y]
+        self.geo_transform = geo_transform
+        self.np_array = np_array
+        self.x_length = x_length
+        self.y_length = y_length
+        self.output_path: Path = output_path
+
+        self.created_tiff_path: Path = None
+
+    def write_geotiff(self, file_name="dem_epsg4326.tif", no_data_value=-9999):
+        """標高と座標、ピクセルサイズ、グリッドサイズからGeoTiffを作成
+
+        Args:
+            file_name (str):
+            no_data_value (int):
+
+        """
+        merge_tiff_file = file_name
+        self.created_tiff_path = self.output_path / merge_tiff_file
+
+        driver = gdal.GetDriverByName("GTiff")
+        dst_ds = driver.Create(str(self.created_tiff_path.resolve()), self.x_length, self.y_length, 1, gdal.GDT_Float32)
+        dst_ds.SetGeoTransform(self.geo_transform)
+
+        # 作成したラスターの第一バンドを取得し、numpyのarrayをセット
+        r_band = dst_ds.GetRasterBand(1)
+        r_band.WriteArray(self.np_array)
+        r_band.SetNoDataValue(no_data_value)
+
+        ref = osr.SpatialReference()
+        ref.ImportFromEPSG(4326)
+        dst_ds.SetProjection(ref.ExportToWkt())
+
+        # ディスクへの書き出し
+        dst_ds.FlushCache()
+
+    def resampling(self, source_path=None, file_name=None, epsg="EPSG:3857", no_data_value=-9999):
+        """EPSG:4326のTiffから新たなGeoTiffを出力する
+
+        Args:
+            source_path (Path):
+            file_name (str):
+            epsg (str):
+            no_data_value (int):
+
+        """
+        if source_path is None:
+            source_path = self.created_tiff_path
+
+        if file_name is None:
+            file_name = "".join(f'dem_{epsg.lower()}.tif'.split(":"))
+
+        warp_path = os.path.join(self.output_path, file_name)
+        src_path = str(source_path.resolve())
+
+        resampled_ras = gdal.Warp(warp_path, src_path, srcSRS="EPSG:4326", dstSRS=epsg, dstNodata=no_data_value,
+                                  resampleAlg="near")
+        resampled_ras.FlushCache()
 
 
 class ConvertDemToGeotiff:
@@ -49,66 +107,6 @@ class ConvertDemToGeotiff:
         y_length = round(abs((upper_right_lat - lower_left_lat) / self.pixel_size_y))
 
         return x_length, y_length
-
-    def write_geotiff(self, np_array, lower_left_lon, upper_right_lat, pixel_size_x, pixel_size_y, x_len, y_len):
-        """標高と座標、ピクセルサイズ、グリッドサイズからGeoTiffを作成
-
-        Args:
-            np_array:
-            lower_left_lon:
-            upper_right_lat:
-            pixel_size_x:
-            pixel_size_y:
-            x_len:
-            y_len:
-
-        """
-        # 「左上経度・東西解像度・回転（０で南北方向）・左上緯度・回転（０で南北方向）・南北解像度（北南方向であれば負）」
-        geo_transform = [lower_left_lon, pixel_size_x, 0, upper_right_lat, 0, pixel_size_y]
-
-        merge_tiff_file = 'dem_epsg4326.tif'
-        tiff_file = os.path.join(self.output_path, merge_tiff_file)
-
-        # ドライバーの作成
-        driver = gdal.GetDriverByName("GTiff")
-        # ドライバーに対して「保存するファイルのパス・グリットセル数・バンド数・ラスターの種類・ドライバー固有のオプション」を指定してファイルを作成
-        dst_ds = driver.Create(tiff_file, x_len, y_len, 1, gdal.GDT_Float32)
-        # geo_transform
-        dst_ds.SetGeoTransform(geo_transform)
-
-        # 作成したラスターの第一バンドを取得
-        r_band = dst_ds.GetRasterBand(1)
-        # 第一バンドにアレイをセット
-        r_band.WriteArray(np_array)
-        # nodataの設定
-        r_band.SetNoDataValue(-9999)
-
-        # EPSGコードを引数にとる前処理？
-        ref = osr.SpatialReference()
-        # EPSGコードを引数にとる
-        ref.ImportFromEPSG(4326)
-        # ラスターに投影法の情報を入れる
-        dst_ds.SetProjection(ref.ExportToWkt())
-
-        # ディスクへの書き出し
-        dst_ds.FlushCache()
-
-    def resampling(self, src_epsg, output_epsg, no_data):
-        """inとoutのepsgコードを受け取りdem_epsg4326.tifをresamplingした新たなGeoTiffを出力する
-
-        Args:
-            src_epsg:
-            output_epsg:
-            no_data:
-
-        """
-        file_name = "".join(f'dem_{self.output_epsg.lower()}.tif'.split(":"))
-        warp_path = os.path.join(self.output_path, file_name)
-        src_path = os.path.join(self.output_path, 'dem_epsg4326.tif')
-        resampled_ras = gdal.Warp(warp_path, src_path, srcSRS=src_epsg, dstSRS=output_epsg, dstNodata=no_data,
-                                  resampleAlg="near")
-
-        resampled_ras.FlushCache()
 
     @staticmethod
     def combine_meta_data_and_contents(meta_data_list, contents_list):
@@ -195,12 +193,18 @@ class ConvertDemToGeotiff:
             # スライスで大きい配列に代入
             large_mesh_np_array[row_start:row_end, column_start:column_end] = np_array
 
-        # アレイからGeoTiffを作成
-        self.write_geotiff(large_mesh_np_array, large_mesh_lower_left_lon,
-                           large_mesh_upper_right_lat, large_mesh_pixel_size_x,
-                           large_mesh_pixel_size_y, large_mesh_x_len, large_mesh_y_len)
+        geo_transform = [
+            large_mesh_lower_left_lon,
+            large_mesh_pixel_size_x,
+            0,
+            large_mesh_upper_right_lat,
+            0,
+            large_mesh_pixel_size_y
+        ]
+        geo_tiff = GeoTiff(geo_transform, large_mesh_np_array, large_mesh_x_len, large_mesh_y_len, self.output_path)
+        geo_tiff.write_geotiff()
 
-        return large_mesh_np_array
+        return geo_tiff
 
     def dem_to_terrain_rgb(self):
         src_path = os.path.join(self.output_path, 'dem_epsg4326.tif')
@@ -231,24 +235,16 @@ class ConvertDemToGeotiff:
             self.bounds_latlng["upper_right"]["lon"]
         ]
 
-        _ = self.find_coordinates_in_large_mesh(
+        geo_tiff = self.find_coordinates_in_large_mesh(
             (x_length, y_length),
             bounds_values,
             self.meta_data_list,
             self.np_array_list
         )
 
-        self.resampling(self.import_epsg, self.output_epsg, no_data=-9999)
+        geo_tiff.resampling()
 
         self.merge_tiff_path = os.path.join(self.output_path, 'dem_epsg4326.tif')
         self.warp_tiff_path = os.path.join(self.output_path, "".join(f'dem_{self.output_epsg.lower()}.tif'.split(":")))
 
         self.dem_to_terrain_rgb()
-
-# 選択された全てのxmlファイルからメッシュコードの一覧を取得し、メッシュコードごとのメタデータ・標高値を保持。
-# 各xmlの最小・最大の緯度経度とグリッドの個数から1ピクセルで表現される距離（pixel_size）を割り出す
-# 全メタデータの緯度経度から最小・最大の緯度経度を探しだす。
-# 同時に各種類のDEMのピクセルサイズは全て同一であると仮定し、1xmlのpixel_sizeと最小・最大の緯度経度から全xmlのグリッド数を割り出す。
-# 全xml分の大きさを持つ空のセルに各xmlの標高値を右上から格納していき、得られたセル・緯度経度・グリッドサイズなどの情報をもとにGeoTiffを作成。
-# GeoTiffを指定のsridにwarpする
-# GeoTiffをTerrain RGB形式に変換する
