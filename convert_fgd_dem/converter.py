@@ -171,7 +171,7 @@ class Converter:
 
         subprocess.check_output(rio_cmd, shell=True)
 
-    def all_exe(self):
+    def dem_to_geotiff(self):
         """処理を一括で行い、選択されたディレクトリに入っているxmlをGeoTiffにコンバートして指定したディレクトリに吐き出す"""
         data_for_geotiff = self.create_data_for_geotiff()
 

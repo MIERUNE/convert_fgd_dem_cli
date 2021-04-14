@@ -19,7 +19,7 @@ def main(import_path, output_path, import_epsg, output_epsg):
         import_epsg=import_epsg,
         output_epsg=output_epsg
     )
-    converter.all_exe()
+    converter.dem_to_geotiff()
 
 
 if __name__ == '__main__':
