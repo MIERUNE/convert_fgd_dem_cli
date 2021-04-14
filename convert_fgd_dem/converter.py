@@ -78,21 +78,14 @@ class Converter:
 
         return mesh_data_list
 
-    def create_data_for_geotiff(
-        self, image_size, min_max_latlng, metadata_list, contents_list
-    ):
+    def create_data_for_geotiff(self):
         """対象のDemを全て取り込んだnp.arrayを作成する
-
-        Args:
-            image_size:
-            min_max_latlng:
-            metadata_list:
-            contents_list:
 
         Returns:
 
         """
         # 全xmlを包括するグリッドセル数
+        image_size = self._calc_image_size()
         x_length = image_size[0]
         y_length = image_size[1]
 
@@ -104,22 +97,19 @@ class Converter:
         dem_array = np.empty((y_length, x_length), np.float32)
         dem_array.fill(-9999)
 
-        corner_lat_lon = {
-            "lower_left_lat": min_max_latlng[0],
-            "lower_left_lon": min_max_latlng[1],
-            "upper_right_lat": min_max_latlng[2],
-            "upper_right_lon": min_max_latlng[3],
-        }
-
         x_pixel_size = (
-            corner_lat_lon["upper_right_lon"] - corner_lat_lon["lower_left_lon"]
+            self.dem.bounds_latlng["upper_right"]["lon"]
+            - self.dem.bounds_latlng["lower_left"]["lon"]
         ) / x_length
         y_pixel_size = (
-            corner_lat_lon["lower_left_lat"] - corner_lat_lon["upper_right_lat"]
+            self.dem.bounds_latlng["lower_left"]["lat"]
+            - self.dem.bounds_latlng["upper_right"]["lat"]
         ) / y_length
 
         # メタデータと標高値を結合
-        data_list = self._combine_meta_data_and_contents(metadata_list, contents_list)
+        data_list = self._combine_meta_data_and_contents(
+            self.dem.meta_data_list, self.dem.np_array_list
+        )
 
         # メッシュのメッシュコードを取り出す
         for data in data_list:
@@ -132,8 +122,8 @@ class Converter:
             lower_left_lat = data["lower_corner"]["lat"]
             lower_left_lon = data["lower_corner"]["lon"]
             # (0, 0)からの距離を算出
-            lat_distance = lower_left_lat - corner_lat_lon["lower_left_lat"]
-            lon_distance = lower_left_lon - corner_lat_lon["lower_left_lon"]
+            lat_distance = lower_left_lat - self.dem.bounds_latlng["lower_left"]["lat"]
+            lon_distance = lower_left_lon - self.dem.bounds_latlng["lower_left"]["lon"]
             # numpy上の座標を取得(ピクセルサイズが少数のため誤差が出るから四捨五入)
             x_coordinate = round(lon_distance / x_pixel_size)
             y_coordinate = round(lat_distance / (-y_pixel_size))
@@ -146,10 +136,10 @@ class Converter:
             dem_array[row_start:row_end, column_start:column_end] = np_array
 
         geo_transform = [
-            corner_lat_lon["lower_left_lon"],
+            self.dem.bounds_latlng["lower_left"]["lon"],
             x_pixel_size,
             0,
-            corner_lat_lon["upper_right_lat"],
+            self.dem.bounds_latlng["upper_right"]["lat"],
             0,
             y_pixel_size,
         ]
@@ -183,19 +173,7 @@ class Converter:
 
     def all_exe(self):
         """処理を一括で行い、選択されたディレクトリに入っているxmlをGeoTiffにコンバートして指定したディレクトリに吐き出す"""
-        bounds_values = [
-            self.dem.bounds_latlng["lower_left"]["lat"],
-            self.dem.bounds_latlng["lower_left"]["lon"],
-            self.dem.bounds_latlng["upper_right"]["lat"],
-            self.dem.bounds_latlng["upper_right"]["lon"],
-        ]
-
-        data_for_geotiff = self.create_data_for_geotiff(
-            self._calc_image_size(),
-            bounds_values,
-            self.dem.meta_data_list,
-            self.dem.np_array_list,
-        )
+        data_for_geotiff = self.create_data_for_geotiff()
 
         geotiff = Geotiff(*data_for_geotiff)
         geotiff.write_geotiff()
