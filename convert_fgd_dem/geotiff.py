@@ -30,7 +30,7 @@ class Geotiff:
 
         self.created_tiff_path: Path = None
 
-    def write_geotiff(self, file_name="dem_epsg4326.tif", no_data_value=-9999):
+    def write_geotiff(self, file_name="output.tif", no_data_value=-9999):
         """標高と座標、ピクセルサイズ、グリッドサイズからGeoTiffを作成
 
         Args:
@@ -66,7 +66,7 @@ class Geotiff:
         dst_ds.FlushCache()
 
     def resampling(
-        self, source_path=None, file_name=None, epsg="EPSG:3857", no_data_value=-9999
+        self, source_path=None, file_name="output.tif", epsg="EPSG:3857", no_data_value=-9999
     ):
         """EPSG:4326のTiffから新たなGeoTiffを出力する
 

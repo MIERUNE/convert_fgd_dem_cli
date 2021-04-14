@@ -13,15 +13,13 @@ class Converter:
     # todo:投影変換するかどうかのオプションをつける
     # todo:吐き出すtiffは一つになるようにする
     # todo:import_epsgは必ず"EPSG:4326"だと思うので引数から外す
-    def __init__(
-        self,
-        import_path,
-        output_path,
-        output_epsg="EPSG:4326",
-    ):
+    def __init__(self, import_path, output_path, output_epsg="EPSG:4326", rgbify=False):
         self.import_path: Path = Path(import_path)
         self.output_path: Path = Path(output_path)
+        if not output_epsg.startswith("EPSG:"):
+            raise Exception("EPSGコードの指定が不正です。EPSG:〇〇の形式で入力してください")
         self.output_epsg: str = output_epsg
+        self.rgbify: bool = rgbify
 
         self.dem = Dem(self.import_path)
 
@@ -175,7 +173,11 @@ class Converter:
         data_for_geotiff = self.make_data_for_geotiff()
 
         geotiff = Geotiff(*data_for_geotiff)
-        geotiff.write_geotiff()
-        geotiff.resampling()
 
-        self.dem_to_terrain_rgb()
+        geotiff.write_geotiff()
+
+        if not self.output_epsg == "EPSG:4326":
+            geotiff.resampling(epsg=self.output_epsg)
+
+        # if self.rgbify:
+        #     self.dem_to_terrain_rgb()
