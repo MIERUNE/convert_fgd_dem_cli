@@ -9,7 +9,6 @@ from .geotiff import Geotiff
 
 
 class Converter:
-    # リファクタリング後にやること
     # todo:terrain-rgbを吐き出すかどうかのオプションをつける
     # todo:投影変換するかどうかのオプションをつける
     # todo:吐き出すtiffは一つになるようにする
@@ -56,12 +55,8 @@ class Converter:
         return x_length, y_length
 
     @staticmethod
-    def _combine_meta_data_and_contents(meta_data_list, contents_list):
+    def _combine_meta_data_and_contents(self):
         """メッシュコードが同一のメタデータと標高値を結合する
-
-        Args:
-            meta_data_list:
-            contents_list:
 
         Returns:
 
@@ -69,8 +64,12 @@ class Converter:
         mesh_data_list = []
 
         # 辞書のリストをメッシュコードをKeyにしてソート
-        sort_metadata_list = sorted(meta_data_list, key=lambda x: x["mesh_code"])
-        sort_contents_list = sorted(contents_list, key=lambda x: x["mesh_code"])
+        sort_metadata_list = sorted(
+            self.dem.meta_data_list, key=lambda x: x["mesh_code"]
+        )
+        sort_contents_list = sorted(
+            self.dem.np_array_list, key=lambda x: x["mesh_code"]
+        )
         # メタデータとコンテンツを結合
         for metadata, content in zip(sort_metadata_list, sort_contents_list):
             metadata.update(content)
@@ -113,25 +112,30 @@ class Converter:
 
         # メッシュのメッシュコードを取り出す
         for data in data_list:
-            # データから標高値の配列を取得
-            np_array = data["np_array"]
-            # グリッドセルサイズ
-            x_len = data["grid_length"]["x"]
-            y_len = data["grid_length"]["y"]
             # 読み込んだarrayの左下の座標を取得
             lower_left_lat = data["lower_corner"]["lat"]
             lower_left_lon = data["lower_corner"]["lon"]
+
             # (0, 0)からの距離を算出
             lat_distance = lower_left_lat - self.dem.bounds_latlng["lower_left"]["lat"]
             lon_distance = lower_left_lon - self.dem.bounds_latlng["lower_left"]["lon"]
+
             # numpy上の座標を取得(ピクセルサイズが少数のため誤差が出るから四捨五入)
             x_coordinate = round(lon_distance / x_pixel_size)
             y_coordinate = round(lat_distance / (-y_pixel_size))
+
+            # グリッドセルサイズ
+            x_len = data["grid_length"]["x"]
+            y_len = data["grid_length"]["y"]
+
             # スライスで指定する範囲を算出
             row_start = int(y_length - (y_coordinate + y_len))
             row_end = int(row_start + y_len)
             column_start = int(x_coordinate)
             column_end = int(column_start + x_len)
+
+            # データから標高値の配列を取得
+            np_array = data["np_array"]
             # スライスで大きい配列に代入
             dem_array[row_start:row_end, column_start:column_end] = np_array
 
