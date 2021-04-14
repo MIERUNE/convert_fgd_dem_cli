@@ -10,6 +10,7 @@ gdal = "==3.2.1"
 rio-rgbify = "==0.3.2"
 
 [dev-packages]
+black = "*"
 
 [requires]
 python_version = "3.9"
