@@ -1,6 +1,6 @@
 import click
 
-from . import ConvertDemToGeotiff
+from . import Converter
 
 
 @click.command()
@@ -13,13 +13,13 @@ from . import ConvertDemToGeotiff
 @click.option('--output_epsg', required=False, type=str, default="EPSG:3857",
               help="GeoTiff（warp.tif）のEPSGコード default=EPSG:3857")
 def main(import_path, output_path, import_epsg, output_epsg):
-    cd = ConvertDemToGeotiff(
+    converter = Converter(
         import_path=import_path,
         output_path=output_path,
         import_epsg=import_epsg,
         output_epsg=output_epsg
     )
-    cd.all_exe()
+    converter.all_exe()
 
 
 if __name__ == '__main__':

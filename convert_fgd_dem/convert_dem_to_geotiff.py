@@ -8,7 +8,7 @@ from .dem import Dem
 from .geotiff import Geotiff
 
 
-class ConvertDemToGeotiff:
+class Converter:
     def __init__(self,
                  import_path="./DEM/FG-GML-6441-32-DEM5A.zip",
                  output_path="./GeoTiff",

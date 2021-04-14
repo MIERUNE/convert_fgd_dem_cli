@@ -4,13 +4,7 @@ from pathlib import Path
 from convert_fgd_dem import Dem
 
 
-class DemTest(unittest.TestCase):
-    def setUp(self):
-        pass
-
-    def tearDown(self):
-        pass
-
+class TestDem(unittest.TestCase):
     def test_bounds_latlng(self):
         dem_ins = Dem(Path("../DEM/FG-GML-6441-32-DEM5A.zip"))
         bounds_latlng = {
