@@ -53,13 +53,12 @@ class Dem:
 
         elif self.import_path.suffix == ".zip":
             with zipfile.ZipFile(self.import_path, 'r') as zip_data:
-                zip_data.extractall(path=self.import_path.parent)
+                zip_data.extractall(path=self.import_path.parent / self.import_path.stem)
                 extract_dir = self.import_path.parent / self.import_path.stem
                 xml_paths = [xml_path for xml_path in extract_dir.glob("*.xml")]
 
         else:
             raise Exception("指定できる形式は「xml」「.xmlが格納されたディレクトリ」「.xmlが格納された.zip」のみです")
-
         return xml_paths
 
     @staticmethod
