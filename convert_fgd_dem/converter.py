@@ -15,14 +15,12 @@ class Converter:
     # todo:import_epsgは必ず"EPSG:4326"だと思うので引数から外す
     def __init__(
         self,
-        import_path="./DEM/FG-GML-6441-32-DEM5A.zip",
-        output_path="./GeoTiff",
-        import_epsg="EPSG:4326",
-        output_epsg="EPSG:3857",
+        import_path,
+        output_path,
+        output_epsg="EPSG:4326",
     ):
         self.import_path: Path = Path(import_path)
         self.output_path: Path = Path(output_path)
-        self.import_epsg: str = import_epsg
         self.output_epsg: str = output_epsg
 
         self.dem = Dem(self.import_path)
@@ -54,7 +52,6 @@ class Converter:
 
         return x_length, y_length
 
-    @staticmethod
     def _combine_meta_data_and_contents(self):
         """メッシュコードが同一のメタデータと標高値を結合する
 
@@ -106,9 +103,7 @@ class Converter:
         ) / y_length
 
         # メタデータと標高値を結合
-        data_list = self._combine_meta_data_and_contents(
-            self.dem.meta_data_list, self.dem.np_array_list
-        )
+        data_list = self._combine_meta_data_and_contents()
 
         # メッシュのメッシュコードを取り出す
         for data in data_list:

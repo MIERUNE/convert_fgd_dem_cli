@@ -6,9 +6,7 @@ from osgeo import gdal, osr
 class Geotiff:
     """GeoTiffを生成するためのクラス"""
 
-    def __init__(
-        self, geo_transform, np_array, x_length, y_length, output_path=Path("./GeoTiff")
-    ):
+    def __init__(self, geo_transform, np_array, x_length, y_length, output_path):
         """イニシャライザ
 
         Args:
