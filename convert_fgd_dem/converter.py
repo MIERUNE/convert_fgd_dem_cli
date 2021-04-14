@@ -78,8 +78,8 @@ class Converter:
 
         return mesh_data_list
 
-    def create_data_for_geotiff(self):
-        """対象のDemを全て取り込んだnp.arrayを作成する
+    def make_data_for_geotiff(self):
+        """Demの情報からGeoTiff作成に必要な情報を生成する
 
         Returns:
 
@@ -173,7 +173,7 @@ class Converter:
 
     def dem_to_geotiff(self):
         """処理を一括で行い、選択されたディレクトリに入っているxmlをGeoTiffにコンバートして指定したディレクトリに吐き出す"""
-        data_for_geotiff = self.create_data_for_geotiff()
+        data_for_geotiff = self.make_data_for_geotiff()
 
         geotiff = Geotiff(*data_for_geotiff)
         geotiff.write_geotiff()
