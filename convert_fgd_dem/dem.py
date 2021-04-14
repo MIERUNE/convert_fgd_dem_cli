@@ -6,9 +6,7 @@ import numpy as np
 
 
 class Dem:
-    """DEMのxmlからメタデータを取り出すクラス
-
-    """
+    """DEMのxmlからメタデータを取り出すクラス"""
 
     def __init__(self, import_path):
         """イニシャライザ
@@ -52,14 +50,15 @@ class Dem:
             xml_paths = [self.import_path]
 
         elif self.import_path.suffix == ".zip":
-            with zipfile.ZipFile(self.import_path, 'r') as zip_data:
-                zip_data.extractall(path=self.import_path.parent)
+            with zipfile.ZipFile(self.import_path, "r") as zip_data:
+                zip_data.extractall(
+                    path=self.import_path.parent / self.import_path.stem
+                )
                 extract_dir = self.import_path.parent / self.import_path.stem
                 xml_paths = [xml_path for xml_path in extract_dir.glob("*.xml")]
 
         else:
             raise Exception("指定できる形式は「xml」「.xmlが格納されたディレクトリ」「.xmlが格納された.zip」のみです")
-
         return xml_paths
 
     @staticmethod
@@ -74,40 +73,28 @@ class Dem:
 
         """
         lowers = raw_metadata["lower_corner"].split(" ")
-        lower_corner = {
-            "lat": float(lowers[0]),
-            'lon': float(lowers[1])
-        }
+        lower_corner = {"lat": float(lowers[0]), "lon": float(lowers[1])}
 
         uppers = raw_metadata["upper_corner"].split(" ")
-        upper_corner = {
-            "lat": float(uppers[0]),
-            'lon': float(uppers[1])
-        }
+        upper_corner = {"lat": float(uppers[0]), "lon": float(uppers[1])}
 
         grids = raw_metadata["grid_length"].split(" ")
-        grid_length = {
-            "x": int(grids[0]) + 1,
-            'y': int(grids[1]) + 1
-        }
+        grid_length = {"x": int(grids[0]) + 1, "y": int(grids[1]) + 1}
 
         start_points = raw_metadata["start_point"].split(" ")
-        start_point = {
-            "x": int(start_points[0]),
-            'y': int(start_points[1])
-        }
+        start_point = {"x": int(start_points[0]), "y": int(start_points[1])}
 
         pixel_size = {
-            'x': (upper_corner['lon'] - lower_corner['lon']) / grid_length['x'],
-            'y': (lower_corner['lat'] - upper_corner['lat']) / grid_length['y']
+            "x": (upper_corner["lon"] - lower_corner["lon"]) / grid_length["x"],
+            "y": (lower_corner["lat"] - upper_corner["lat"]) / grid_length["y"],
         }
 
         meta_data = {
-            'mesh_code': raw_metadata["mesh_code"],
+            "mesh_code": raw_metadata["mesh_code"],
             "lower_corner": lower_corner,
             "upper_corner": upper_corner,
             "grid_length": grid_length,
-            'start_point': start_point,
+            "start_point": start_point,
             "pixel_size": pixel_size,
         }
 
@@ -127,44 +114,50 @@ class Dem:
             raise Exception("指定できる形式は.xmlのみです")
 
         name_space = {
-            'dataset': "http://fgd.gsi.go.jp/spec/2008/FGD_GMLSchema",
-            'gml': 'http://www.opengis.net/gml/3.2',
+            "dataset": "http://fgd.gsi.go.jp/spec/2008/FGD_GMLSchema",
+            "gml": "http://www.opengis.net/gml/3.2",
         }
 
         tree = et.parse(xml_path)
         root = tree.getroot()
 
-        mesh_code = int(root.find('dataset:DEM//dataset:mesh', name_space).text)
+        mesh_code = int(root.find("dataset:DEM//dataset:mesh", name_space).text)
 
         raw_metadata = {
             "mesh_code": mesh_code,
-            "lower_corner": root.find('dataset:DEM//dataset:coverage//gml:boundedBy//gml:Envelope//gml:lowerCorner',
-                                      name_space).text,
-            "upper_corner": root.find('dataset:DEM//dataset:coverage//gml:boundedBy//gml:Envelope//gml:upperCorner',
-                                      name_space).text,
-            "grid_length": root.find('dataset:DEM//dataset:coverage//gml:gridDomain//gml:Grid//gml:high',
-                                     name_space).text,
+            "lower_corner": root.find(
+                "dataset:DEM//dataset:coverage//gml:boundedBy//gml:Envelope//gml:lowerCorner",
+                name_space,
+            ).text,
+            "upper_corner": root.find(
+                "dataset:DEM//dataset:coverage//gml:boundedBy//gml:Envelope//gml:upperCorner",
+                name_space,
+            ).text,
+            "grid_length": root.find(
+                "dataset:DEM//dataset:coverage//gml:gridDomain//gml:Grid//gml:high",
+                name_space,
+            ).text,
             "start_point": root.find(
-                'dataset:DEM//dataset:coverage//gml:coverageFunction//gml:GridFunction//gml:startPoint',
-                name_space).text
+                "dataset:DEM//dataset:coverage//gml:coverageFunction//gml:GridFunction//gml:startPoint",
+                name_space,
+            ).text,
         }
 
         meta_data = self._format_metadata(raw_metadata)
 
-        tuple_list = root.find('dataset:DEM//dataset:coverage//gml:rangeSet//gml:DataBlock//gml:tupleList',
-                               name_space).text
+        tuple_list = root.find(
+            "dataset:DEM//dataset:coverage//gml:rangeSet//gml:DataBlock//gml:tupleList",
+            name_space,
+        ).text
 
         # gml:tupleList先頭の改行を削除したのち、[[地表面,354.15]...]のようなlistのlistを作成
         if tuple_list.startswith("\n"):
             strip_tuple_list = tuple_list.strip()
-            items = [item.split(',')[1] for item in strip_tuple_list.split("\n")]
+            items = [item.split(",")[1] for item in strip_tuple_list.split("\n")]
         else:
-            items = [item.split(',')[1] for item in tuple_list.split("\n")]
+            items = [item.split(",")[1] for item in tuple_list.split("\n")]
 
-        elevation = {
-            "mesh_code": mesh_code,
-            "items": items
-        }
+        elevation = {"mesh_code": mesh_code, "items": items}
 
         return {
             "mesh_code": mesh_code,
@@ -194,13 +187,13 @@ class Dem:
 
         # どちらもTrue、つまり要素が存在しているときにraise
         if all((third_mesh_codes, second_mesh_codes)):
-            raise Exception('2次メッシュと3次メッシュが混合しています。')
+            raise Exception("2次メッシュと3次メッシュが混合しています。")
 
     def _get_xml_content_list(self):
-        """xmlのリストを読み込んでメタデータと標高値のリストを作成する
-
-        """
-        self.all_content_list = [self.get_xml_content(xml_path) for xml_path in self.xml_paths]
+        """xmlのリストを読み込んでメタデータと標高値のリストを作成する"""
+        self.all_content_list = [
+            self.get_xml_content(xml_path) for xml_path in self.xml_paths
+        ]
 
         self.mesh_code_list = [item["mesh_code"] for item in self.all_content_list]
         self._check_mesh_codes()
@@ -209,23 +202,23 @@ class Dem:
         self.elevation_list = [item["elevation"] for item in self.all_content_list]
 
     def _store_bounds_latlng(self):
-        """対象の全Demから緯度経度の最大・最小値を取得
-
-        """
-        lower_left_lat = min([meta_data['lower_corner']['lat'] for meta_data in self.meta_data_list])
-        lower_left_lon = min([meta_data['lower_corner']['lon'] for meta_data in self.meta_data_list])
-        upper_right_lat = max([meta_data['upper_corner']['lat'] for meta_data in self.meta_data_list])
-        upper_right_lon = max([meta_data['upper_corner']['lon'] for meta_data in self.meta_data_list])
+        """対象の全Demから緯度経度の最大・最小値を取得"""
+        lower_left_lat = min(
+            [meta_data["lower_corner"]["lat"] for meta_data in self.meta_data_list]
+        )
+        lower_left_lon = min(
+            [meta_data["lower_corner"]["lon"] for meta_data in self.meta_data_list]
+        )
+        upper_right_lat = max(
+            [meta_data["upper_corner"]["lat"] for meta_data in self.meta_data_list]
+        )
+        upper_right_lon = max(
+            [meta_data["upper_corner"]["lon"] for meta_data in self.meta_data_list]
+        )
 
         bounds_latlng = {
-            "lower_left": {
-                "lat": lower_left_lat,
-                "lon": lower_left_lon
-            },
-            "upper_right": {
-                "lat": upper_right_lat,
-                "lon": upper_right_lon
-            },
+            "lower_left": {"lat": lower_left_lat, "lon": lower_left_lon},
+            "upper_right": {"lat": upper_right_lat, "lon": upper_right_lon},
         }
 
         self.bounds_latlng = bounds_latlng
@@ -245,15 +238,15 @@ class Dem:
         meta_data = content["meta_data"]
         elevation = content["elevation"]["items"]
 
-        x_length = meta_data['grid_length']['x']
-        y_length = meta_data['grid_length']['y']
+        x_length = meta_data["grid_length"]["x"]
+        y_length = meta_data["grid_length"]["y"]
 
         # 標高地を保存するための二次元配列を作成
         array = np.empty((y_length, x_length), np.float32)
         array.fill(-9999)
 
-        start_point_x = meta_data['start_point']['x']
-        start_point_y = meta_data['start_point']['y']
+        start_point_x = meta_data["start_point"]["x"]
+        start_point_y = meta_data["start_point"]["y"]
 
         # 標高を格納
         # データの並びは北西端から南東端に向かっているので行毎に座標を配列に入れていく
@@ -265,15 +258,12 @@ class Dem:
                 index += 1
             start_point_x = 0
 
-        np_array = {
-            'mesh_code': mesh_code,
-            'np_array': array
-        }
+        np_array = {"mesh_code": mesh_code, "np_array": array}
 
         return np_array
 
     def _store_np_array_list(self):
-        """Demからメッシュコードと標高値のnp.arrayを格納した辞書のリストを作成する
-
-        """
-        self.np_array_list = [self._get_np_array(content) for content in self.all_content_list]
+        """Demからメッシュコードと標高値のnp.arrayを格納した辞書のリストを作成する"""
+        self.np_array_list = [
+            self._get_np_array(content) for content in self.all_content_list
+        ]
