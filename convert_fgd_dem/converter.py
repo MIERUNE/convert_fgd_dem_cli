@@ -28,9 +28,6 @@ class Converter:
 
         self.dem = Dem(self.import_path)
 
-        self.pixel_size_x: float = self.dem.meta_data_list[0]["pixel_size"]["x"]
-        self.pixel_size_y: float = self.dem.meta_data_list[0]["pixel_size"]["y"]
-
     def _calc_grid_cell_size(self):
         """Dem境界の緯度経度とピクセルサイズから出力画像の大きさを算出する
 
@@ -43,8 +40,18 @@ class Converter:
         upper_right_lat = self.dem.bounds_latlng["upper_right"]["lat"]
         upper_right_lon = self.dem.bounds_latlng["upper_right"]["lon"]
 
-        x_length = round(abs((upper_right_lon - lower_left_lon) / self.pixel_size_x))
-        y_length = round(abs((upper_right_lat - lower_left_lat) / self.pixel_size_y))
+        x_length = round(
+            abs(
+                (upper_right_lon - lower_left_lon)
+                / self.dem.meta_data_list[0]["pixel_size"]["x"]
+            )
+        )
+        y_length = round(
+            abs(
+                (upper_right_lat - lower_left_lat)
+                / self.dem.meta_data_list[0]["pixel_size"]["y"]
+            )
+        )
 
         return x_length, y_length
 
