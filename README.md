@@ -40,10 +40,13 @@ If it doesn't work, reinstall.
 Usage: __main__.py [OPTIONS]
 
 Options:
-  --import_path TEXT  変換対象のパスを指定（「xml」「.xmlが格納されたディレクトリ」「.xmlが格納された.zip」が対象です。） default=./DEM/FG-GML-6441-32-DEM5A.zip
+  --import_path TEXT  変換対象のパスを指定（「xml」「.xmlが格納されたディレクトリ」「.xmlが格納された.zip」が対象です。
+                      ） default=./DEM/FG-GML-6441-32-DEM5A.zip
+
   --output_path TEXT  GeoTiffを格納するディレクトリ default=./GeoTiff
-  --import_epsg TEXT  DEMのEPSGコード default=EPSG:4326
-  --output_epsg TEXT  GeoTiff（warp.tif）のEPSGコード default=EPSG:3857
+  --output_epsg TEXT  書き出すGeoTiffのEPSGコード default=EPSG:4326
+  --rgbify BOOLEAN    terrain rgbを作成するか選択 default=False
+
   --help              Show this message and exit.
 ```
 
