@@ -41,6 +41,8 @@ class Geotiff:
 
         """
         merge_tiff_file = file_name
+        if not self.output_path.exists():
+            self.output_path.mkdir()
         self.created_tiff_path = self.output_path / merge_tiff_file
 
         driver = gdal.GetDriverByName("GTiff")
