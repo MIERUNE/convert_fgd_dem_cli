@@ -78,13 +78,13 @@ class Converter:
 
         return mesh_data_list
 
-    def create_geotiff(
-        self, grid_cell_size, min_max_latlng, metadata_list, contents_list
+    def create_data_for_geotiff(
+        self, image_size, min_max_latlng, metadata_list, contents_list
     ):
         """対象のDemを全て取り込んだnp.arrayを作成する
 
         Args:
-            grid_cell_size:
+            image_size:
             min_max_latlng:
             metadata_list:
             contents_list:
@@ -93,75 +93,72 @@ class Converter:
 
         """
         # 全xmlを包括するグリッドセル数
-        large_mesh_x_len = grid_cell_size[0]
-        large_mesh_y_len = grid_cell_size[1]
+        x_length = image_size[0]
+        y_length = image_size[1]
+
+        # グリッドセルサイズが10000以上なら処理を終了
+        if x_length >= 10000 or y_length >= 10000:
+            raise Exception(f"セルサイズが大きすぎます。x={x_length}・y={y_length}")
 
         # 全xmlを包括する配列を作成
-        # グリッドセルサイズが10000以上なら処理を終了
-        if large_mesh_x_len >= 10000 or large_mesh_y_len >= 10000:
-            raise Exception("セルサイズが大きすぎます")
+        dem_array = np.empty((y_length, x_length), np.float32)
+        dem_array.fill(-9999)
 
-        large_mesh_np_array = np.empty((large_mesh_y_len, large_mesh_x_len), np.float32)
-        large_mesh_np_array.fill(-9999)
+        corner_lat_lon = {
+            "lower_left_lat": min_max_latlng[0],
+            "lower_left_lon": min_max_latlng[1],
+            "upper_right_lat": min_max_latlng[2],
+            "upper_right_lon": min_max_latlng[3],
+        }
 
-        # マージ用配列の左下の座標を取得
-        large_mesh_lower_left_lat = min_max_latlng[0]
-        large_mesh_lower_left_lon = min_max_latlng[1]
-        # マージ用配列の右上の座標を取得
-        large_mesh_upper_right_lat = min_max_latlng[2]
-        large_mesh_upper_right_lon = min_max_latlng[3]
-
-        # マージ用配列のピクセルサイズ算出
-        large_mesh_pixel_size_x = (
-            large_mesh_upper_right_lon - large_mesh_lower_left_lon
-        ) / large_mesh_x_len
-        large_mesh_pixel_size_y = (
-            large_mesh_lower_left_lat - large_mesh_upper_right_lat
-        ) / large_mesh_y_len
+        x_pixel_size = (
+            corner_lat_lon["upper_right_lon"] - corner_lat_lon["lower_left_lon"]
+        ) / x_length
+        y_pixel_size = (
+            corner_lat_lon["lower_left_lat"] - corner_lat_lon["upper_right_lat"]
+        ) / y_length
 
         # メタデータと標高値を結合
-        mesh_data_list = self._combine_meta_data_and_contents(
-            metadata_list, contents_list
-        )
+        data_list = self._combine_meta_data_and_contents(metadata_list, contents_list)
 
         # メッシュのメッシュコードを取り出す
-        for mesh_data in mesh_data_list:
+        for data in data_list:
             # データから標高値の配列を取得
-            np_array = mesh_data["np_array"]
+            np_array = data["np_array"]
             # グリッドセルサイズ
-            x_len = mesh_data["grid_length"]["x"]
-            y_len = mesh_data["grid_length"]["y"]
+            x_len = data["grid_length"]["x"]
+            y_len = data["grid_length"]["y"]
             # 読み込んだarrayの左下の座標を取得
-            lower_left_lat = mesh_data["lower_corner"]["lat"]
-            lower_left_lon = mesh_data["lower_corner"]["lon"]
+            lower_left_lat = data["lower_corner"]["lat"]
+            lower_left_lon = data["lower_corner"]["lon"]
             # (0, 0)からの距離を算出
-            lat_distance = lower_left_lat - large_mesh_lower_left_lat
-            lon_distance = lower_left_lon - large_mesh_lower_left_lon
+            lat_distance = lower_left_lat - corner_lat_lon["lower_left_lat"]
+            lon_distance = lower_left_lon - corner_lat_lon["lower_left_lon"]
             # numpy上の座標を取得(ピクセルサイズが少数のため誤差が出るから四捨五入)
-            x_coordinate = round(lon_distance / large_mesh_pixel_size_x)
-            y_coordinate = round(lat_distance / (-large_mesh_pixel_size_y))
+            x_coordinate = round(lon_distance / x_pixel_size)
+            y_coordinate = round(lat_distance / (-y_pixel_size))
             # スライスで指定する範囲を算出
-            row_start = int(large_mesh_y_len - (y_coordinate + y_len))
+            row_start = int(y_length - (y_coordinate + y_len))
             row_end = int(row_start + y_len)
             column_start = int(x_coordinate)
             column_end = int(column_start + x_len)
             # スライスで大きい配列に代入
-            large_mesh_np_array[row_start:row_end, column_start:column_end] = np_array
+            dem_array[row_start:row_end, column_start:column_end] = np_array
 
         geo_transform = [
-            large_mesh_lower_left_lon,
-            large_mesh_pixel_size_x,
+            corner_lat_lon["lower_left_lon"],
+            x_pixel_size,
             0,
-            large_mesh_upper_right_lat,
+            corner_lat_lon["upper_right_lat"],
             0,
-            large_mesh_pixel_size_y,
+            y_pixel_size,
         ]
 
         data_for_geotiff = (
             geo_transform,
-            large_mesh_np_array,
-            large_mesh_x_len,
-            large_mesh_y_len,
+            dem_array,
+            x_length,
+            y_length,
             self.output_path,
         )
         return data_for_geotiff
@@ -193,7 +190,7 @@ class Converter:
             self.dem.bounds_latlng["upper_right"]["lon"],
         ]
 
-        data_for_geotiff = self.create_geotiff(
+        data_for_geotiff = self.create_data_for_geotiff(
             self._calc_image_size(),
             bounds_values,
             self.dem.meta_data_list,
