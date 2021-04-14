@@ -25,11 +25,19 @@ from . import Converter
     default="EPSG:4326",
     help="書き出すGeoTiffのEPSGコード default=EPSG:4326",
 )
-def main(import_path, output_path, output_epsg):
+@click.option(
+    "--rgbify",
+    required=False,
+    type=bool,
+    default=False,
+    help="terrain rgbを作成するか選択 default=False",
+)
+def main(import_path, output_path, output_epsg, rgbify):
     converter = Converter(
         import_path=import_path,
         output_path=output_path,
         output_epsg=output_epsg,
+        rgbify=rgbify,
     )
     converter.dem_to_geotiff()
 

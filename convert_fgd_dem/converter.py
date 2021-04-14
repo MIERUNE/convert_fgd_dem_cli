@@ -151,22 +151,17 @@ class Converter:
         return data_for_geotiff
 
     def dem_to_terrain_rgb(self):
-        src_path = os.path.join(self.output_path, "dem_epsg4326.tif")
+        src_path = self.output_path / "output.tif"
 
-        filled_dem = "".join(
-            f"dem_{self.output_epsg.lower()}_nodata_none.tif".split(":")
-        )
-        warp_path = os.path.join(self.output_path, filled_dem)
-
-        warp_cmd = f"gdalwarp -overwrite -t_srs {self.output_epsg} -dstnodata None {src_path} {warp_path}"
+        filled_dem_path = self.output_path / "nodata_none.tif"
+        warp_cmd = f"gdalwarp -overwrite -t_srs {self.output_epsg} -dstnodata None {src_path.resolve()} {filled_dem_path.resolve()}"
         subprocess.check_output(warp_cmd, shell=True)
 
-        rgb_name = "".join(f"dem_{self.output_epsg.lower()}_rgbify.tif".split(":"))
-        rgb_path = os.path.join(self.output_path, rgb_name)
-
-        rio_cmd = f"rio rgbify -b -10000 -i 0.1 {warp_path} {rgb_path}"
-
+        rgb_path = self.output_path / "rgbify.tif"
+        rio_cmd = f"rio rgbify -b -10000 -i 0.1 {filled_dem_path.resolve()} {rgb_path.resolve()}"
         subprocess.check_output(rio_cmd, shell=True)
+
+        filled_dem_path.unlink(missing_ok=False)
 
     def dem_to_geotiff(self):
         """処理を一括で行い、選択されたディレクトリに入っているxmlをGeoTiffにコンバートして指定したディレクトリに吐き出す"""
@@ -179,5 +174,5 @@ class Converter:
         if not self.output_epsg == "EPSG:4326":
             geotiff.resampling(epsg=self.output_epsg)
 
-        # if self.rgbify:
-        #     self.dem_to_terrain_rgb()
+        if self.rgbify:
+            self.dem_to_terrain_rgb()
