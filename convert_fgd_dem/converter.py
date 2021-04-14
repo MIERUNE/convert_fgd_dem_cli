@@ -27,12 +27,11 @@ class Converter:
         self.output_epsg: str = output_epsg
 
         self.dem = Dem(self.import_path)
-        self.meta_data_list: list = self.dem.meta_data_list
         self.np_array_list: list = self.dem.np_array_list
         self.bounds_latlng: dict = self.dem.bounds_latlng
 
-        self.pixel_size_x: float = self.meta_data_list[0]["pixel_size"]["x"]
-        self.pixel_size_y: float = self.meta_data_list[0]["pixel_size"]["y"]
+        self.pixel_size_x: float = self.dem.meta_data_list[0]["pixel_size"]["x"]
+        self.pixel_size_y: float = self.dem.meta_data_list[0]["pixel_size"]["y"]
 
     def _calc_grid_cell_size(self):
         """Dem境界の緯度経度とピクセルサイズから出力画像の大きさを算出する
@@ -192,7 +191,10 @@ class Converter:
         ]
 
         data_for_geotiff = self.create_geotiff(
-            (x_length, y_length), bounds_values, self.meta_data_list, self.np_array_list
+            (x_length, y_length),
+            bounds_values,
+            self.dem.meta_data_list,
+            self.np_array_list,
         )
 
         geotiff = Geotiff(*data_for_geotiff)
