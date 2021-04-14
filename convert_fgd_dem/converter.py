@@ -13,17 +13,13 @@ class Converter:
     # todo:投影変換するかどうかのオプションをつける
     # todo:吐き出すtiffは一つになるようにする
     # todo:import_epsgは必ず"EPSG:4326"だと思うので引数から外す
-    def __init__(
-        self,
-        import_path="./DEM/FG-GML-6441-32-DEM5A.zip",
-        output_path="./GeoTiff",
-        import_epsg="EPSG:4326",
-        output_epsg="EPSG:3857",
-    ):
+    def __init__(self, import_path, output_path, output_epsg="EPSG:4326", rgbify=False):
         self.import_path: Path = Path(import_path)
         self.output_path: Path = Path(output_path)
-        self.import_epsg: str = import_epsg
+        if not output_epsg.startswith("EPSG:"):
+            raise Exception("EPSGコードの指定が不正です。EPSG:〇〇の形式で入力してください")
         self.output_epsg: str = output_epsg
+        self.rgbify: bool = rgbify
 
         self.dem = Dem(self.import_path)
 
@@ -54,7 +50,6 @@ class Converter:
 
         return x_length, y_length
 
-    @staticmethod
     def _combine_meta_data_and_contents(self):
         """メッシュコードが同一のメタデータと標高値を結合する
 
@@ -106,9 +101,7 @@ class Converter:
         ) / y_length
 
         # メタデータと標高値を結合
-        data_list = self._combine_meta_data_and_contents(
-            self.dem.meta_data_list, self.dem.np_array_list
-        )
+        data_list = self._combine_meta_data_and_contents()
 
         # メッシュのメッシュコードを取り出す
         for data in data_list:
@@ -158,29 +151,28 @@ class Converter:
         return data_for_geotiff
 
     def dem_to_terrain_rgb(self):
-        src_path = os.path.join(self.output_path, "dem_epsg4326.tif")
+        src_path = self.output_path / "output.tif"
 
-        filled_dem = "".join(
-            f"dem_{self.output_epsg.lower()}_nodata_none.tif".split(":")
-        )
-        warp_path = os.path.join(self.output_path, filled_dem)
-
-        warp_cmd = f"gdalwarp -overwrite -t_srs {self.output_epsg} -dstnodata None {src_path} {warp_path}"
+        filled_dem_path = self.output_path / "nodata_none.tif"
+        warp_cmd = f"gdalwarp -overwrite -t_srs {self.output_epsg} -dstnodata None {src_path.resolve()} {filled_dem_path.resolve()}"
         subprocess.check_output(warp_cmd, shell=True)
 
-        rgb_name = "".join(f"dem_{self.output_epsg.lower()}_rgbify.tif".split(":"))
-        rgb_path = os.path.join(self.output_path, rgb_name)
-
-        rio_cmd = f"rio rgbify -b -10000 -i 0.1 {warp_path} {rgb_path}"
-
+        rgb_path = self.output_path / "rgbify.tif"
+        rio_cmd = f"rio rgbify -b -10000 -i 0.1 {filled_dem_path.resolve()} {rgb_path.resolve()}"
         subprocess.check_output(rio_cmd, shell=True)
+
+        filled_dem_path.unlink(missing_ok=False)
 
     def dem_to_geotiff(self):
         """処理を一括で行い、選択されたディレクトリに入っているxmlをGeoTiffにコンバートして指定したディレクトリに吐き出す"""
         data_for_geotiff = self.make_data_for_geotiff()
 
         geotiff = Geotiff(*data_for_geotiff)
-        geotiff.write_geotiff()
-        geotiff.resampling()
 
-        self.dem_to_terrain_rgb()
+        geotiff.write_geotiff()
+
+        if not self.output_epsg == "EPSG:4326":
+            geotiff.resampling(epsg=self.output_epsg)
+
+        if self.rgbify:
+            self.dem_to_terrain_rgb()
