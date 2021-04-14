@@ -27,7 +27,6 @@ class Converter:
         self.output_epsg: str = output_epsg
 
         self.dem = Dem(self.import_path)
-        self.bounds_latlng: dict = self.dem.bounds_latlng
 
         self.pixel_size_x: float = self.dem.meta_data_list[0]["pixel_size"]["x"]
         self.pixel_size_y: float = self.dem.meta_data_list[0]["pixel_size"]["y"]
@@ -39,10 +38,10 @@ class Converter:
             tuple: x/y方向の画像の大きさ
 
         """
-        lower_left_lat = self.bounds_latlng["lower_left"]["lat"]
-        lower_left_lon = self.bounds_latlng["lower_left"]["lon"]
-        upper_right_lat = self.bounds_latlng["upper_right"]["lat"]
-        upper_right_lon = self.bounds_latlng["upper_right"]["lon"]
+        lower_left_lat = self.dem.bounds_latlng["lower_left"]["lat"]
+        lower_left_lon = self.dem.bounds_latlng["lower_left"]["lon"]
+        upper_right_lat = self.dem.bounds_latlng["upper_right"]["lat"]
+        upper_right_lon = self.dem.bounds_latlng["upper_right"]["lon"]
 
         x_length = round(abs((upper_right_lon - lower_left_lon) / self.pixel_size_x))
         y_length = round(abs((upper_right_lat - lower_left_lat) / self.pixel_size_y))
@@ -183,10 +182,10 @@ class Converter:
         x_length, y_length = self._calc_grid_cell_size()
 
         bounds_values = [
-            self.bounds_latlng["lower_left"]["lat"],
-            self.bounds_latlng["lower_left"]["lon"],
-            self.bounds_latlng["upper_right"]["lat"],
-            self.bounds_latlng["upper_right"]["lon"],
+            self.dem.bounds_latlng["lower_left"]["lat"],
+            self.dem.bounds_latlng["lower_left"]["lon"],
+            self.dem.bounds_latlng["upper_right"]["lat"],
+            self.dem.bounds_latlng["upper_right"]["lon"],
         ]
 
         data_for_geotiff = self.create_geotiff(
