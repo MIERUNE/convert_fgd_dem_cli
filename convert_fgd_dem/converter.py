@@ -28,7 +28,7 @@ class Converter:
 
         self.dem = Dem(self.import_path)
 
-    def _calc_grid_cell_size(self):
+    def _calc_image_size(self):
         """Dem境界の緯度経度とピクセルサイズから出力画像の大きさを算出する
 
         Returns:
@@ -186,8 +186,6 @@ class Converter:
 
     def all_exe(self):
         """処理を一括で行い、選択されたディレクトリに入っているxmlをGeoTiffにコンバートして指定したディレクトリに吐き出す"""
-        x_length, y_length = self._calc_grid_cell_size()
-
         bounds_values = [
             self.dem.bounds_latlng["lower_left"]["lat"],
             self.dem.bounds_latlng["lower_left"]["lon"],
@@ -196,7 +194,7 @@ class Converter:
         ]
 
         data_for_geotiff = self.create_geotiff(
-            (x_length, y_length),
+            self._calc_image_size(),
             bounds_values,
             self.dem.meta_data_list,
             self.dem.np_array_list,
