@@ -24,24 +24,19 @@ def rgbify(
 ):
     """rio-rgbify method."""
     workers = 4
-    if dst_path.split(".")[-1].lower() == "tif":
-        with rio.open(src_path) as src:
-            meta = src.profile.copy()
-        meta.update(count=3, dtype=np.uint8)
+    with rio.open(src_path) as src:
+        meta = src.profile.copy()
+    meta.update(count=3, dtype=np.uint8)
 
-        gargs = {"interval": interval,
-                 "base_val": base_val,
-                 "bidx": 1
-                 }
-        with RioMucho(
-                [src_path], dst_path, _rgb_worker, options=meta, global_args=gargs
-        ) as rm:
-            rm.run(workers)
-
-    else:
-        raise ValueError(
-            "{} output filetype not supported".format(dst_path.split(".")[-1])
-        )
+    gargs = {
+        "interval": interval,
+        "base_val": base_val,
+        "bidx": 1
+    }
+    with RioMucho(
+            [src_path], dst_path, _rgb_worker, options=meta, global_args=gargs
+    ) as rm:
+        rm.run(workers)
 
 
 class Converter:
