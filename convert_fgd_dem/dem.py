@@ -56,7 +56,8 @@ class Dem:
                 )
                 extract_dir = self.import_path.parent / self.import_path.stem
                 xml_paths = [xml_path for xml_path in extract_dir.glob("*.xml")]
-
+                if not xml_paths:
+                    raise Exception("指定のパスにxmlファイルが存在しません")
         else:
             raise Exception("指定できる形式は「xml」「.xmlが格納されたディレクトリ」「.xmlが格納された.zip」のみです")
         return xml_paths
