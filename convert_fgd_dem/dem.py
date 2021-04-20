@@ -1,3 +1,4 @@
+import shutil
 import xml.etree.ElementTree as et
 import zipfile
 from pathlib import Path
@@ -42,7 +43,8 @@ class Dem:
 
         """
         if self.import_path.is_dir():
-            xml_paths = [xml_path for xml_path in self.import_path.glob("*.xml")]
+            xml_paths = [
+                xml_path for xml_path in self.import_path.glob("*.xml")]
             if xml_paths is None:
                 raise Exception("指定ディレクトリに.xmlが存在しません")
 
@@ -52,14 +54,19 @@ class Dem:
         elif self.import_path.suffix == ".zip":
             with zipfile.ZipFile(self.import_path, "r") as zip_data:
                 zip_data.extractall(
-                    path=self.import_path.parent / self.import_path.stem
+                    path=self.import_path.parent
                 )
                 extract_dir = self.import_path.parent / self.import_path.stem
-                xml_paths = [xml_path for xml_path in extract_dir.glob("*.xml")]
+                xml_paths = [
+                    xml_path for xml_path in extract_dir.glob("*.xml")]
                 if not xml_paths:
                     raise Exception("指定のパスにxmlファイルが存在しません")
+            garbage_dir = self.import_path.parent / "__MACOSX"
+            if garbage_dir.exists():
+                shutil.rmtree(garbage_dir)
         else:
-            raise Exception("指定できる形式は「xml」「.xmlが格納されたディレクトリ」「.xmlが格納された.zip」のみです")
+            raise Exception(
+                "指定できる形式は「xml」「.xmlが格納されたディレクトリ」「.xmlが格納された.zip」のみです")
         return xml_paths
 
     @staticmethod
@@ -86,8 +93,14 @@ class Dem:
         start_point = {"x": int(start_points[0]), "y": int(start_points[1])}
 
         pixel_size = {
-            "x": (upper_corner["lon"] - lower_corner["lon"]) / grid_length["x"],
-            "y": (lower_corner["lat"] - upper_corner["lat"]) / grid_length["y"],
+            "x": (
+                upper_corner["lon"] -
+                lower_corner["lon"]) /
+            grid_length["x"],
+            "y": (
+                lower_corner["lat"] -
+                upper_corner["lat"]) /
+            grid_length["y"],
         }
 
         meta_data = {
@@ -122,7 +135,10 @@ class Dem:
         tree = et.parse(xml_path)
         root = tree.getroot()
 
-        mesh_code = int(root.find("dataset:DEM//dataset:mesh", name_space).text)
+        mesh_code = int(
+            root.find(
+                "dataset:DEM//dataset:mesh",
+                name_space).text)
 
         raw_metadata = {
             "mesh_code": mesh_code,
@@ -154,7 +170,8 @@ class Dem:
         # gml:tupleList先頭の改行を削除したのち、[[地表面,354.15]...]のようなlistのlistを作成
         if tuple_list.startswith("\n"):
             strip_tuple_list = tuple_list.strip()
-            items = [item.split(",")[1] for item in strip_tuple_list.split("\n")]
+            items = [item.split(",")[1]
+                     for item in strip_tuple_list.split("\n")]
         else:
             items = [item.split(",")[1] for item in tuple_list.split("\n")]
 
@@ -196,26 +213,25 @@ class Dem:
             self.get_xml_content(xml_path) for xml_path in self.xml_paths
         ]
 
-        self.mesh_code_list = [item["mesh_code"] for item in self.all_content_list]
+        self.mesh_code_list = [item["mesh_code"]
+                               for item in self.all_content_list]
         self._check_mesh_codes()
 
-        self.meta_data_list = [item["meta_data"] for item in self.all_content_list]
-        self.elevation_list = [item["elevation"] for item in self.all_content_list]
+        self.meta_data_list = [item["meta_data"]
+                               for item in self.all_content_list]
+        self.elevation_list = [item["elevation"]
+                               for item in self.all_content_list]
 
     def _store_bounds_latlng(self):
         """対象の全Demから緯度経度の最大・最小値を取得"""
-        lower_left_lat = min(
-            [meta_data["lower_corner"]["lat"] for meta_data in self.meta_data_list]
-        )
-        lower_left_lon = min(
-            [meta_data["lower_corner"]["lon"] for meta_data in self.meta_data_list]
-        )
-        upper_right_lat = max(
-            [meta_data["upper_corner"]["lat"] for meta_data in self.meta_data_list]
-        )
-        upper_right_lon = max(
-            [meta_data["upper_corner"]["lon"] for meta_data in self.meta_data_list]
-        )
+        lower_left_lat = min([meta_data["lower_corner"]["lat"]
+                              for meta_data in self.meta_data_list])
+        lower_left_lon = min([meta_data["lower_corner"]["lon"]
+                              for meta_data in self.meta_data_list])
+        upper_right_lat = max([meta_data["upper_corner"]["lat"]
+                               for meta_data in self.meta_data_list])
+        upper_right_lon = max([meta_data["upper_corner"]["lon"]
+                               for meta_data in self.meta_data_list])
 
         bounds_latlng = {
             "lower_left": {"lat": lower_left_lat, "lon": lower_left_lon},
