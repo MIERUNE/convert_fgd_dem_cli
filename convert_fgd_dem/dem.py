@@ -270,8 +270,12 @@ class Dem:
         index = 0
         for y in range(start_point_y, y_length):
             for x in range(start_point_x, x_length):
-                insert_value = float(elevation[index])
-                array[y][x] = insert_value
+                try:
+                    insert_value = float(elevation[index])
+                    array[y][x] = insert_value
+                # データの行数とグリッドのサイズは必ずしもピッタリ合うわけではないのでインデックスのサイズをはみ出したらループを停止
+                except IndexError:
+                    break
                 index += 1
             start_point_x = 0
 
