@@ -1,3 +1,5 @@
+import os
+import shutil
 import xml.etree.ElementTree as et
 import zipfile
 from pathlib import Path
@@ -34,6 +36,40 @@ class Dem:
         self.bounds_latlng: dict = {}
         self._store_bounds_latlng()
 
+    def _unzip_dem(self, dest_dir):
+        """DEMが格納されたzipファイルを解凍する
+
+        Args:
+            dest_dir (Path): 解凍先のディレクトリパス
+
+        """
+        with zipfile.ZipFile(self.import_path, "r") as zip_data:
+            # 圧縮のされ方が違うため（？）、解凍後のフォルダ構成が異なるのでひとまず展開して後ほど移動
+            zip_data.extractall(path=dest_dir)
+            # macOSでzip解凍時に作成されるゴミファイルを削除
+            garbage_dir = dest_dir / "__MACOSX"
+            if garbage_dir.exists():
+                shutil.rmtree(garbage_dir)
+
+            # 解凍後のディレクトリの中に同名ディレクトリが作成されていなければreturn
+            if dest_dir.glob(".xml"):
+                return
+
+            # 作成されていれば、サブディレクトリから取り出す
+            for path in zip_data.namelist():
+                if path.endswith(".xml"):
+                    try:
+                        shutil.move(dest_dir / path, dest_dir)
+                    except shutil.Error:
+                        print(
+                            f"ファイルがすでに存在しています。"
+                            f"ファイルの移動をスキップし、オリジナルファイルを削除します：{dest_dir / path}")
+                        os.remove(dest_dir / path)
+                        continue
+            # 内部に親フォルダと同名ディレクトリが残るので削除
+            if (dest_dir / self.import_path.stem).exists():
+                (dest_dir / self.import_path.stem).rmdir()
+
     def _get_xml_paths(self):
         """指定したパスからxmlのPathオブジェクトのリストを作成
 
@@ -42,7 +78,8 @@ class Dem:
 
         """
         if self.import_path.is_dir():
-            xml_paths = [xml_path for xml_path in self.import_path.glob("*.xml")]
+            xml_paths = [
+                xml_path for xml_path in self.import_path.glob("*.xml")]
             if xml_paths is None:
                 raise Exception("指定ディレクトリに.xmlが存在しません")
 
@@ -50,15 +87,16 @@ class Dem:
             xml_paths = [self.import_path]
 
         elif self.import_path.suffix == ".zip":
-            with zipfile.ZipFile(self.import_path, "r") as zip_data:
-                zip_data.extractall(
-                    path=self.import_path.parent / self.import_path.stem
-                )
-                extract_dir = self.import_path.parent / self.import_path.stem
-                xml_paths = [xml_path for xml_path in extract_dir.glob("*.xml")]
-
+            extract_dir = self.import_path.parent / self.import_path.stem
+            # 指定ディレクトリにunzip
+            self._unzip_dem(extract_dir)
+            xml_paths = [
+                xml_path for xml_path in extract_dir.glob("*.xml")]
+            if not xml_paths:
+                raise Exception("指定のパスにxmlファイルが存在しません")
         else:
-            raise Exception("指定できる形式は「xml」「.xmlが格納されたディレクトリ」「.xmlが格納された.zip」のみです")
+            raise Exception(
+                "指定できる形式は「xml」「.xmlが格納されたディレクトリ」「.xmlが格納された.zip」のみです")
         return xml_paths
 
     @staticmethod
@@ -85,8 +123,14 @@ class Dem:
         start_point = {"x": int(start_points[0]), "y": int(start_points[1])}
 
         pixel_size = {
-            "x": (upper_corner["lon"] - lower_corner["lon"]) / grid_length["x"],
-            "y": (lower_corner["lat"] - upper_corner["lat"]) / grid_length["y"],
+            "x": (
+                upper_corner["lon"] -
+                lower_corner["lon"]) /
+            grid_length["x"],
+            "y": (
+                lower_corner["lat"] -
+                upper_corner["lat"]) /
+            grid_length["y"],
         }
 
         meta_data = {
@@ -121,7 +165,10 @@ class Dem:
         tree = et.parse(xml_path)
         root = tree.getroot()
 
-        mesh_code = int(root.find("dataset:DEM//dataset:mesh", name_space).text)
+        mesh_code = int(
+            root.find(
+                "dataset:DEM//dataset:mesh",
+                name_space).text)
 
         raw_metadata = {
             "mesh_code": mesh_code,
@@ -153,7 +200,8 @@ class Dem:
         # gml:tupleList先頭の改行を削除したのち、[[地表面,354.15]...]のようなlistのlistを作成
         if tuple_list.startswith("\n"):
             strip_tuple_list = tuple_list.strip()
-            items = [item.split(",")[1] for item in strip_tuple_list.split("\n")]
+            items = [item.split(",")[1]
+                     for item in strip_tuple_list.split("\n")]
         else:
             items = [item.split(",")[1] for item in tuple_list.split("\n")]
 
@@ -195,26 +243,25 @@ class Dem:
             self.get_xml_content(xml_path) for xml_path in self.xml_paths
         ]
 
-        self.mesh_code_list = [item["mesh_code"] for item in self.all_content_list]
+        self.mesh_code_list = [item["mesh_code"]
+                               for item in self.all_content_list]
         self._check_mesh_codes()
 
-        self.meta_data_list = [item["meta_data"] for item in self.all_content_list]
-        self.elevation_list = [item["elevation"] for item in self.all_content_list]
+        self.meta_data_list = [item["meta_data"]
+                               for item in self.all_content_list]
+        self.elevation_list = [item["elevation"]
+                               for item in self.all_content_list]
 
     def _store_bounds_latlng(self):
         """対象の全Demから緯度経度の最大・最小値を取得"""
-        lower_left_lat = min(
-            [meta_data["lower_corner"]["lat"] for meta_data in self.meta_data_list]
-        )
-        lower_left_lon = min(
-            [meta_data["lower_corner"]["lon"] for meta_data in self.meta_data_list]
-        )
-        upper_right_lat = max(
-            [meta_data["upper_corner"]["lat"] for meta_data in self.meta_data_list]
-        )
-        upper_right_lon = max(
-            [meta_data["upper_corner"]["lon"] for meta_data in self.meta_data_list]
-        )
+        lower_left_lat = min([meta_data["lower_corner"]["lat"]
+                              for meta_data in self.meta_data_list])
+        lower_left_lon = min([meta_data["lower_corner"]["lon"]
+                              for meta_data in self.meta_data_list])
+        upper_right_lat = max([meta_data["upper_corner"]["lat"]
+                               for meta_data in self.meta_data_list])
+        upper_right_lon = max([meta_data["upper_corner"]["lon"]
+                               for meta_data in self.meta_data_list])
 
         bounds_latlng = {
             "lower_left": {"lat": lower_left_lat, "lon": lower_left_lon},
@@ -253,8 +300,12 @@ class Dem:
         index = 0
         for y in range(start_point_y, y_length):
             for x in range(start_point_x, x_length):
-                insert_value = float(elevation[index])
-                array[y][x] = insert_value
+                try:
+                    insert_value = float(elevation[index])
+                    array[y][x] = insert_value
+                # データの行数とグリッドのサイズは必ずしもピッタリ合うわけではないのでインデックスのサイズをはみ出したらループを停止
+                except IndexError:
+                    break
                 index += 1
             start_point_x = 0
 

@@ -6,7 +6,13 @@ from osgeo import gdal, osr
 class Geotiff:
     """GeoTiffを生成するためのクラス"""
 
-    def __init__(self, geo_transform, np_array, x_length, y_length, output_path):
+    def __init__(
+            self,
+            geo_transform,
+            np_array,
+            x_length,
+            y_length,
+            output_path):
         """イニシャライザ
 
         Args:
@@ -66,8 +72,11 @@ class Geotiff:
         dst_ds.FlushCache()
 
     def resampling(
-        self, source_path=None, file_name="output.tif", epsg="EPSG:3857", no_data_value=-9999
-    ):
+            self,
+            source_path=None,
+            file_name="output.tif",
+            epsg="EPSG:3857",
+            no_data_value=-9999):
         """EPSG:4326のTiffから新たなGeoTiffを出力する
 
         Args:

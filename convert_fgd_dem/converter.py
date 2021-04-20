@@ -1,11 +1,10 @@
-import os
 import subprocess
 from pathlib import Path
 
 import numpy as np
 
-from .dem import Dem
-from .geotiff import Geotiff
+from convert_fgd_dem.dem import Dem
+from convert_fgd_dem.geotiff import Geotiff
 
 
 class Converter:
@@ -13,7 +12,12 @@ class Converter:
     # todo:投影変換するかどうかのオプションをつける
     # todo:吐き出すtiffは一つになるようにする
     # todo:import_epsgは必ず"EPSG:4326"だと思うので引数から外す
-    def __init__(self, import_path, output_path, output_epsg="EPSG:4326", rgbify=False):
+    def __init__(
+            self,
+            import_path,
+            output_path,
+            output_epsg="EPSG:4326",
+            rgbify=False):
         self.import_path: Path = Path(import_path)
         self.output_path: Path = Path(output_path)
         if not output_epsg.startswith("EPSG:"):
@@ -110,8 +114,10 @@ class Converter:
             lower_left_lon = data["lower_corner"]["lon"]
 
             # (0, 0)からの距離を算出
-            lat_distance = lower_left_lat - self.dem.bounds_latlng["lower_left"]["lat"]
-            lon_distance = lower_left_lon - self.dem.bounds_latlng["lower_left"]["lon"]
+            lat_distance = lower_left_lat - \
+                self.dem.bounds_latlng["lower_left"]["lat"]
+            lon_distance = lower_left_lon - \
+                self.dem.bounds_latlng["lower_left"]["lon"]
 
             # numpy上の座標を取得(ピクセルサイズが少数のため誤差が出るから四捨五入)
             x_coordinate = round(lon_distance / x_pixel_size)
