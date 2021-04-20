@@ -30,7 +30,6 @@ If it doesn't work, reinstall.
 % pipenv uninstall gdal
 % pipenv install numpy
 % pipenv run pip install GDAL==$(gdal-config --version) --global-option=build_ext --global-option="-I/usr/include/gdal"
-% pipenv install gdal
 ```
 
 ## help

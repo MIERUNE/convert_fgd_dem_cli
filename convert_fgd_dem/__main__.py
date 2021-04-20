@@ -1,6 +1,6 @@
 import click
 
-from . import Converter
+from convert_fgd_dem import Converter
 
 
 @click.command()

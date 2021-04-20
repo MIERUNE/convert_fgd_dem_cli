@@ -3,14 +3,15 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 name = "pypi"
 
+[dev-packages]
+autopep8 = "*"
+flake8 = "*"
+isort = "*"
+
 [packages]
 click = "==7.1.2"
 numpy = "==1.20.1"
-gdal = "==3.2.1"
 rio-rgbify = "==0.3.2"
-
-[dev-packages]
-black = "*"
 
 [requires]
 python_version = "3.9"
