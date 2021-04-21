@@ -2,9 +2,41 @@ import subprocess
 from pathlib import Path
 
 import numpy as np
+from rio_rgbify.encoders import data_to_rgb
+from riomucho import RioMucho
+import rasterio as rio
 
 from convert_fgd_dem.dem import Dem
 from convert_fgd_dem.geotiff import Geotiff
+
+
+def _rgb_worker(data, window, ij, g_args):
+    return data_to_rgb(
+        data[0][g_args["bidx"] - 1], g_args["base_val"], g_args["interval"]
+    )
+
+
+def rgbify(
+        src_path,
+        dst_path,
+        base_val,
+        interval,
+):
+    """rio-rgbify method."""
+    workers = 4
+    with rio.open(src_path) as src:
+        meta = src.profile.copy()
+    meta.update(count=3, dtype=np.uint8)
+
+    gargs = {
+        "interval": interval,
+        "base_val": base_val,
+        "bidx": 1
+    }
+    with RioMucho(
+            [src_path], dst_path, _rgb_worker, options=meta, global_args=gargs
+    ) as rm:
+        rm.run(workers)
 
 
 class Converter:
@@ -164,8 +196,12 @@ class Converter:
         subprocess.check_output(warp_cmd, shell=True)
 
         rgb_path = self.output_path / "rgbify.tif"
-        rio_cmd = f"rio rgbify -b -10000 -i 0.1 {filled_dem_path.resolve()} {rgb_path.resolve()}"
-        subprocess.check_output(rio_cmd, shell=True)
+        rgbify(
+            src_path=filled_dem_path.resolve(),
+            dst_path=rgb_path.resolve(),
+            base_val=-10000,
+            interval=0.1
+        )
 
         filled_dem_path.unlink(missing_ok=False)
 
