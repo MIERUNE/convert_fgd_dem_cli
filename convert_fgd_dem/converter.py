@@ -1,4 +1,3 @@
-import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -8,6 +7,7 @@ import rasterio as rio
 
 from convert_fgd_dem.dem import Dem
 from convert_fgd_dem.geotiff import Geotiff
+from convert_fgd_dem.helpers import warp
 
 
 def _rgb_worker(data, window, ij, g_args):
@@ -192,8 +192,12 @@ class Converter:
         src_path = self.output_path / "output.tif"
 
         filled_dem_path = self.output_path / "nodata_none.tif"
-        warp_cmd = f"gdalwarp -overwrite -t_srs {self.output_epsg} -dstnodata None {src_path.resolve()} {filled_dem_path.resolve()}"
-        subprocess.check_output(warp_cmd, shell=True)
+        warp(
+            source_path=src_path.resolve(),
+            file_name=filled_dem_path.resolve(),
+            epsg=self.output_epsg,
+            output_path=self.output_path,
+        )
 
         rgb_path = self.output_path / "rgbify.tif"
         rgbify(

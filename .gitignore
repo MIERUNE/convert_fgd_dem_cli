@@ -1,4 +1,6 @@
-/DEM/
+*DEM/
 /GeoTiff/
 /test_generated/
 /target_files/
+*.pyc
+*__pycache__/
