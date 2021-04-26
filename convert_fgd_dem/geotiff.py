@@ -34,10 +34,9 @@ class Geotiff:
         self.x_length = x_length
         self.y_length = y_length
         self.output_path: Path = output_path
-        # TODO Noneよりディフォルトパス書いたほうがいいかな？
-        self.created_tiff_path: Path = None
+        self.created_tiff_path: Path = self.output_path / "output.tif"
 
-    def write_geotiff(self, file_name="output.tif", no_data_value=-9999):
+    def write_geotiff(self, file_name="output.tif", no_data_value=0):
         """標高と座標、ピクセルサイズ、グリッドサイズからGeoTiffを作成
 
         Args:

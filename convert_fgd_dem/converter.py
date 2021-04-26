@@ -1,5 +1,4 @@
 from pathlib import Path
-
 import numpy as np
 from rio_rgbify.encoders import data_to_rgb
 from riomucho import RioMucho
@@ -24,7 +23,7 @@ def rgbify(
 ):
     """rio-rgbify method."""
     workers = 4
-    with rio.open(src_path) as src:
+    with rio.open(src_path, dtype=np.int16) as src:
         meta = src.profile.copy()
     meta.update(count=3, dtype=np.uint8)
 
@@ -125,7 +124,7 @@ class Converter:
 
         # 全xmlを包括する配列を作成
         dem_array = np.empty((y_length, x_length), np.float32)
-        dem_array.fill(-9999)
+        dem_array.fill(0)
 
         x_pixel_size = (
             self.dem.bounds_latlng["upper_right"]["lon"]
@@ -194,7 +193,7 @@ class Converter:
         filled_dem_path = self.output_path / "nodata_none.tif"
         warp(
             source_path=src_path.resolve(),
-            file_name=filled_dem_path.resolve(),
+            file_name="nodata_none.tif",
             epsg=self.output_epsg,
             output_path=self.output_path,
         )
