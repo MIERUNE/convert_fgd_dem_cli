@@ -36,7 +36,7 @@ class Geotiff:
         self.output_path: Path = output_path
         self.created_tiff_path: Path = self.output_path / "output.tif"
 
-    def write_geotiff(self, file_name="output.tif", no_data_value=0):
+    def write_geotiff(self, file_name="output.tif", no_data_value=-9999):
         """標高と座標、ピクセルサイズ、グリッドサイズからGeoTiffを作成
 
         Args:
