@@ -23,7 +23,7 @@ def rgbify(
 ):
     """rio-rgbify method."""
     workers = 4
-    with rio.open(src_path, dtype=np.int16) as src:
+    with rio.open(src_path) as src:
         meta = src.profile.copy()
     meta.update(count=3, dtype=np.uint8)
 
@@ -124,7 +124,7 @@ class Converter:
 
         # 全xmlを包括する配列を作成
         dem_array = np.empty((y_length, x_length), np.float32)
-        dem_array.fill(0)
+        dem_array.fill(-9999)
 
         x_pixel_size = (
             self.dem.bounds_latlng["upper_right"]["lon"]
