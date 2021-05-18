@@ -1,7 +1,7 @@
-import subprocess
 from pathlib import Path
 
 import numpy as np
+from osgeo import gdal
 
 from convert_fgd_dem.dem import Dem
 from convert_fgd_dem.geotiff import Geotiff
@@ -156,29 +156,27 @@ class Converter:
         )
         return data_for_geotiff
 
-    def dem_to_terrain_rgb(self):
-        src_path = self.output_path / "output.tif"
-
-        filled_dem_path = self.output_path / "nodata_none.tif"
-        warp_cmd = f"gdalwarp -overwrite -t_srs {self.output_epsg} -dstnodata None {src_path.resolve()} {filled_dem_path.resolve()}"
-        subprocess.check_output(warp_cmd, shell=True)
-
-        rgb_path = self.output_path / "rgbify.tif"
-        rio_cmd = f"rio rgbify -b -10000 -i 0.1 {filled_dem_path.resolve()} {rgb_path.resolve()}"
-        subprocess.check_output(rio_cmd, shell=True)
-
-        filled_dem_path.unlink(missing_ok=False)
-
     def dem_to_geotiff(self):
-        """処理を一括で行い、選択されたディレクトリに入っているxmlをGeoTiffにコンバートして指定したディレクトリに吐き出す"""
+        """
+        処理を一括で行い、選択されたディレクトリに入っているxmlをGeoTiffにコンバートして指定したディレクトリに吐き出す
+        rgbify=Trueの場合、terrainRGBも作成
+        """
         data_for_geotiff = self.make_data_for_geotiff()
 
         geotiff = Geotiff(*data_for_geotiff)
 
-        geotiff.write_geotiff()
+        geotiff.write(1, gdal.GDT_Float32)
 
         if not self.output_epsg == "EPSG:4326":
             geotiff.resampling(epsg=self.output_epsg)
 
         if self.rgbify:
-            self.dem_to_terrain_rgb()
+            geotiff.write(
+                3,
+                gdal.GDT_Byte,
+                file_name="rgbify.tif",
+                rgbify=self.rgbify
+            )
+
+            if not self.output_epsg == "EPSG:4326":
+                geotiff.resampling(epsg=self.output_epsg, file_name="rgbify.tif")
