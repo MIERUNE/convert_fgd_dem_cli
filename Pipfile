@@ -11,7 +11,6 @@ isort = "*"
 [packages]
 click = "==7.1.2"
 numpy = "==1.20.1"
-rio-rgbify = "==0.3.2"
 
 [requires]
 python_version = "3.9"
