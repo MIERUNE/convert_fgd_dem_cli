@@ -19,7 +19,7 @@ Run the tool with downloaded "xml" or "directory containing .xml" or ".zip conta
 ## Usage
 
 ```shell
-% pipenv run python -m convert_fgd_dem
+% pipenv run python -m convert
 ```
 
 If it doesn't work, reinstall.
@@ -43,7 +43,7 @@ pipenv install -d
 ## help
 
 ```shell
-% pipenv run python -m convert_fgd_dem --help
+% pipenv run python -m convert --help
 Usage: __main__.py [OPTIONS]
 
 Options:
@@ -63,4 +63,5 @@ Options:
 - Download `FG-GML-6441-32-DEM5A.zip`
 - Make directory `DEM`
 - Store `FG-GML-6441-32-DEM5A.zip` in `DEM`
-- Run `pipenv run python -m convert_fgd_dem`
+- Run `pipenv run python -m convert
+
