@@ -10,7 +10,6 @@ isort = "*"
 
 [packages]
 click = "==7.1.2"
-numpy = "==1.20.1"
 convert-fgd-dem = {git = "https://github.com/MIERUNE/convert_fgd_dem"}
 
 [requires]
