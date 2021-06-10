@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "b1982fd588701e206681f59c2619069b22b389bbb46e6360474abe86ff28e20b"
+            "sha256": "f69b419c491591ae29b3862200350ca78f7210a3ec68675b65f219d264656544"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -23,6 +23,16 @@
             ],
             "index": "pypi",
             "version": "==7.1.2"
+        },
+        "convert-fgd-dem": {
+            "git": "https://github.com/MIERUNE/convert_fgd_dem",
+            "ref": "8eba3159f435ac5010ac3c3007447a89ecf9d754"
+        },
+        "gdal": {
+            "hashes": [
+                "sha256:41e928fbe6880a7b38124b8dff9efe82f3d4e1bc17f771fda46bf222289ab9a4"
+            ],
+            "version": "==3.2.1"
         },
         "numpy": {
             "hashes": [
