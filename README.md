@@ -63,5 +63,5 @@ Options:
 - Download `FG-GML-6441-32-DEM5A.zip`
 - Make directory `DEM`
 - Store `FG-GML-6441-32-DEM5A.zip` in `DEM`
-- Run `pipenv run python -m convert
+- Run `pipenv run python -m convert`
 
